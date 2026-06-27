@@ -785,8 +785,11 @@ class _CmdLeafState extends State<_CmdLeaf> {
                 else
                   _Switch(on: _active, color: locked ? mut(.2) : widget.color),
               ]),
-            ));
-      });
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
