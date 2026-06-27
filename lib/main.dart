@@ -50,9 +50,34 @@ Future<bool> checkRoot() async {
 Future<String> runRoot(String cmd) async {
   if (!_root) return 'NO_ROOT';
   try {
-    final r = await Process.run('su', ['-c', cmd]);
-    return r.stdout.toString().trim();
+    final r = await Process.run('su', ['-c', 'sh -c ${_shellQuote(cmd)}']);
+    final out = r.stdout.toString().trim();
+    final err = r.stderr.toString().trim();
+    if (out.isNotEmpty) return out;
+    if (err.isNotEmpty) return 'ERR: $err';
+    return 'OK';
   } catch (e) { return 'ERROR: $e'; }
+}
+
+String _shellQuote(String s) => "'${s.replaceAll("'", "'\\''")}'";
+
+Future<String> readSys(String path) async {
+  try {
+    final s = (await File(path).readAsString()).trim();
+    if (s.isNotEmpty) return s;
+  } catch (_) {}
+  if (_root) {
+    try {
+      final r = await Process.run('su', ['-c', 'cat "$path"']);
+      final out = r.stdout.toString().trim();
+      if (out.isNotEmpty &&
+          !out.contains('Permission denied') &&
+          !out.contains('No such file')) {
+        return out;
+      }
+    } catch (_) {}
+  }
+  return '';
 }
 
 // APP
@@ -167,7 +192,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   }
 }
 
-// APP ICON elegan — huruf S circuit
+// APP ICON — Hexagon chip / processor
 class _AppIcon extends StatelessWidget {
   final double size;
   const _AppIcon({required this.size});
@@ -176,12 +201,12 @@ class _AppIcon extends StatelessWidget {
     width: size, height: size,
     decoration: BoxDecoration(
       shape: BoxShape.circle,
-      gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [Color(0xFF1A1A40), Color(0xFF060612)]),
-      border: Border.all(color: kCyan.withOpacity(.35), width: 1.5),
+      gradient: const RadialGradient(
+        center: Alignment(-0.3, -0.3),
+        colors: [Color(0xFF1C1C44), Color(0xFF080816)]),
       boxShadow: [
-        BoxShadow(color: kCyan.withOpacity(.4), blurRadius: 28, spreadRadius: 1),
-        BoxShadow(color: kPurple.withOpacity(.15), blurRadius: 48, spreadRadius: -4),
+        BoxShadow(color: kCyan.withOpacity(.35), blurRadius: 26, spreadRadius: 1),
+        BoxShadow(color: kPurple.withOpacity(.18), blurRadius: 46, spreadRadius: -6),
       ],
     ),
     child: CustomPaint(painter: _IconPainter(), size: Size(size, size)),
@@ -189,29 +214,54 @@ class _AppIcon extends StatelessWidget {
 }
 
 class _IconPainter extends CustomPainter {
+  double _c(double a) => 1 - a*a/2 + a*a*a*a/24 - a*a*a*a*a*a/720;
+  double _s(double a) => a - a*a*a/6 + a*a*a*a*a/120 - a*a*a*a*a*a*a/5040;
+  Offset _hex(double cx, double cy, double r, int i) {
+    final a = (i * 60 - 90) * 3.14159265 / 180;
+    return Offset(cx + r * _c(a), cy + r * _s(a));
+  }
   @override
   void paint(Canvas canvas, Size s) {
     final cx = s.width / 2, cy = s.height / 2;
-    final p = Paint()..color = kCyan..style = PaintingStyle.stroke
-      ..strokeWidth = 3.2..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-    final path = Path();
-    path.moveTo(cx + s.width*.18, cy - s.height*.22);
-    path.cubicTo(cx + s.width*.18, cy - s.height*.28,
-        cx - s.width*.20, cy - s.height*.28, cx - s.width*.20, cy - s.height*.12);
-    path.cubicTo(cx - s.width*.20, cy + s.height*.02,
-        cx + s.width*.20, cy - s.height*.02, cx + s.width*.20, cy + s.height*.12);
-    path.cubicTo(cx + s.width*.20, cy + s.height*.28,
-        cx - s.width*.18, cy + s.height*.28, cx - s.width*.18, cy + s.height*.22);
-    canvas.drawPath(path, p);
-    final dot = Paint()..color = kCyan..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-    canvas.drawCircle(Offset(cx + s.width*.18, cy - s.height*.22), 2.5, dot);
-    canvas.drawCircle(Offset(cx - s.width*.18, cy + s.height*.22), 2.5, dot);
-    final line = Paint()..color = kCyan.withOpacity(.35)..strokeWidth = 1..strokeCap = StrokeCap.round;
-    canvas.drawLine(Offset(cx + s.width*.18, cy - s.height*.22),
-        Offset(cx + s.width*.3, cy - s.height*.22), line);
-    canvas.drawLine(Offset(cx - s.width*.18, cy + s.height*.22),
-        Offset(cx - s.width*.3, cy + s.height*.22), line);
+    final rOuter = s.width * 0.34, rInner = s.width * 0.16;
+    // Kaki sirkuit
+    final legPaint = Paint()..color = kCyan.withOpacity(.5)
+      ..strokeWidth = s.width * 0.022..strokeCap = StrokeCap.round;
+    final padPaint = Paint()..color = kCyan.withOpacity(.7);
+    for (int i = 0; i < 6; i++) {
+      final inner = _hex(cx, cy, rOuter, i);
+      final outer = _hex(cx, cy, rOuter + s.width * 0.1, i);
+      canvas.drawLine(inner, outer, legPaint);
+      canvas.drawCircle(outer, s.width * 0.026, padPaint);
+    }
+    // Hexagon luar
+    final hexPath = Path();
+    for (int i = 0; i < 6; i++) {
+      final p = _hex(cx, cy, rOuter, i);
+      i == 0 ? hexPath.moveTo(p.dx, p.dy) : hexPath.lineTo(p.dx, p.dy);
+    }
+    hexPath.close();
+    canvas.drawPath(hexPath, Paint()..shader = LinearGradient(
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+        colors: [kCyan.withOpacity(.18), kPurple.withOpacity(.08)])
+      .createShader(Rect.fromCircle(center: Offset(cx, cy), radius: rOuter)));
+    canvas.drawPath(hexPath, Paint()..style = PaintingStyle.stroke
+      ..strokeWidth = s.width * 0.028..strokeJoin = StrokeJoin.round
+      ..color = kCyan..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2));
+    // Inti chip
+    final corePath = Path();
+    for (int i = 0; i < 6; i++) {
+      final p = _hex(cx, cy, rInner, i);
+      i == 0 ? corePath.moveTo(p.dx, p.dy) : corePath.lineTo(p.dx, p.dy);
+    }
+    corePath.close();
+    canvas.drawPath(corePath, Paint()..shader =
+      RadialGradient(colors: [kCyan, const Color(0xFF0080A0)])
+        .createShader(Rect.fromCircle(center: Offset(cx, cy), radius: rInner))
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1));
+    canvas.drawCircle(Offset(cx, cy), s.width * 0.045,
+      Paint()..color = Colors.white..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
+    canvas.drawCircle(Offset(cx, cy), s.width * 0.028, Paint()..color = Colors.white);
   }
   @override
   bool shouldRepaint(_) => false;
@@ -317,8 +367,8 @@ class _DashboardTabState extends State<DashboardTab> {
   @override
   void dispose() { _timer.cancel(); super.dispose(); }
 
-  Future<String> _r(String p) async { try { return (await File(p).readAsString()).trim(); } catch (_) { return ''; } }
-  Future<String> _rf(String p) async { try { return await File(p).readAsString(); } catch (_) { return ''; } }
+  Future<String> _r(String p) async => readSys(p);
+  Future<String> _rf(String p) async => readSys(p);
   int _parseMem(String c, String k) {
     for (final l in c.split('\n')) {
       if (l.startsWith(k)) return int.tryParse(l.split(':')[1].trim().split(' ')[0]) ?? 0;
@@ -334,18 +384,17 @@ class _DashboardTabState extends State<DashboardTab> {
       for (int i = 0; i < 15; i++) {
         final t = await _r('/sys/class/thermal/thermal_zone$i/temp');
         final n = int.tryParse(t) ?? 0;
-        if (n > 30000 && n < 90000) { temp = '${(n/1000).toStringAsFixed(1)}°C'; break; }
+        if (n > 25000 && n < 95000) { temp = '${(n/1000).toStringAsFixed(1)}°C'; break; }
       }
       final mem = await _rf('/proc/meminfo');
       final mt = _parseMem(mem, 'MemTotal'), mf = _parseMem(mem, 'MemAvailable');
-      String bat = '---', bt = '---';
-      try {
-        bat = await _r('/sys/class/power_supply/battery/capacity');
-        final rawBt = await _r('/sys/class/power_supply/battery/temp');
-        final bti = int.tryParse(rawBt) ?? 0;
-        bt = '${(bti/10).toStringAsFixed(1)}°C';
-        if (bat.isNotEmpty) bat = '$bat%';
-      } catch (_) {}
+      String bat = '', bt = '---';
+      bat = await _r('/sys/class/power_supply/battery/capacity');
+      String rawBt = await _r('/sys/class/power_supply/battery/temp');
+      if (rawBt.isEmpty) rawBt = await _r('/sys/class/power_supply/mtk-gauge/temp');
+      final bti = int.tryParse(rawBt) ?? 0;
+      if (bti != 0) bt = bti > 100 ? '${(bti/10).toStringAsFixed(1)}°C' : '$bti°C';
+      if (bat.isNotEmpty) bat = '$bat%';
       final up = await _rf('/proc/uptime');
       final sec = double.tryParse(up.split(' ')[0]) ?? 0;
       final upStr = '${sec~/3600}h ${((sec%3600)~/60)}m';
@@ -617,68 +666,136 @@ class CommandTab extends StatelessWidget {
 }
 
 // CMD GROUP
-class _CmdGroup extends StatefulWidget {
+class _CmdGroup extends StatelessWidget {
   final IconData icon;
   final String label, subtitle;
   final Color accent;
   final List<_CmdLeaf> children;
   const _CmdGroup({required this.icon, required this.label, required this.subtitle, required this.accent, required this.children});
-  @override
-  State<_CmdGroup> createState() => _CmdGroupState();
-}
 
-class _CmdGroupState extends State<_CmdGroup> with SingleTickerProviderStateMixin {
-  bool _open = false;
-  late AnimationController _c;
-  late Animation<double> _exp, _rot;
-  @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
-    _exp = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
-    _rot = Tween(begin: 0.0, end: 0.5).animate(_exp);
+  void _openDialog(BuildContext context) {
+    HapticFeedback.selectionClick();
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: label,
+      barrierColor: Colors.black.withOpacity(.65),
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (_, __, ___) => const SizedBox.shrink(),
+      transitionBuilder: (ctx, anim, _, __) {
+        final curve = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return Transform.scale(
+          scale: 0.92 + 0.08 * curve.value,
+          child: Opacity(
+            opacity: curve.value,
+            child: _CmdDialog(icon: icon, label: label, subtitle: subtitle, accent: accent, children: children),
+          ),
+        );
+      },
+    );
   }
-  @override
-  void dispose() { _c.dispose(); super.dispose(); }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: ValueListenableBuilder<bool>(
         valueListenable: isNightNotifier,
-        builder: (_, __, ___) => Container(
-          decoration: BoxDecoration(color: kPanel, borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: _open ? widget.accent.withOpacity(.4) : kBorder),
-            boxShadow: _open ? [BoxShadow(color: widget.accent.withOpacity(.07), blurRadius: 20)] : []),
-          child: Column(children: [
-            GestureDetector(
-              onTap: () { setState(() => _open = !_open); _open ? _c.forward() : _c.reverse(); HapticFeedback.selectionClick(); },
-              behavior: HitTestBehavior.opaque,
-              child: Padding(padding: const EdgeInsets.all(14), child: Row(children: [
-                Container(padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: widget.accent.withOpacity(.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: widget.accent.withOpacity(.2))),
-                  child: Icon(widget.icon, color: widget.accent, size: 20)),
-                const SizedBox(width: 12),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(widget.label, style: TextStyle(color: kWhite, fontSize: 14, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text(widget.subtitle, style: TextStyle(color: mut(.35), fontSize: 10.5), maxLines: 1, overflow: TextOverflow.ellipsis),
-                ])),
-                Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(color: widget.accent.withOpacity(.12), borderRadius: BorderRadius.circular(8)),
-                  child: Text('${widget.children.length}', style: TextStyle(color: widget.accent, fontSize: 11, fontWeight: FontWeight.w800))),
-                const SizedBox(width: 6),
-                RotationTransition(turns: _rot, child: Icon(Icons.keyboard_arrow_down_rounded, color: mut(.35), size: 20)),
+        builder: (_, __, ___) => GestureDetector(
+          onTap: () => _openDialog(context),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            decoration: BoxDecoration(color: kPanel, borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: kBorder)),
+            child: Padding(padding: const EdgeInsets.all(14), child: Row(children: [
+              Container(padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: accent.withOpacity(.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: accent.withOpacity(.2))),
+                child: Icon(icon, color: accent, size: 20)),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(label, style: TextStyle(color: kWhite, fontSize: 14, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: TextStyle(color: mut(.35), fontSize: 10.5), maxLines: 1, overflow: TextOverflow.ellipsis),
               ])),
-            ),
-            SizeTransition(sizeFactor: _exp, child: Column(children: [
-              Divider(height: 1, color: kBorder),
-              Padding(padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-                  child: Column(children: widget.children)),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(color: accent.withOpacity(.12), borderRadius: BorderRadius.circular(8)),
+                child: Text('${children.length}', style: TextStyle(color: accent, fontSize: 11, fontWeight: FontWeight.w800))),
+              const SizedBox(width: 8),
+              Icon(Icons.open_in_full_rounded, color: mut(.3), size: 16),
             ])),
-          ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// DIALOG isi opsi di tengah layar
+class _CmdDialog extends StatelessWidget {
+  final IconData icon;
+  final String label, subtitle;
+  final Color accent;
+  final List<_CmdLeaf> children;
+  const _CmdDialog({required this.icon, required this.label, required this.subtitle, required this.accent, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: isNightNotifier,
+      builder: (_, __, ___) => Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.72, maxWidth: 440),
+              decoration: BoxDecoration(
+                color: kPanel,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: accent.withOpacity(.35)),
+                boxShadow: [
+                  BoxShadow(color: accent.withOpacity(.15), blurRadius: 40, spreadRadius: -4),
+                  BoxShadow(color: Colors.black.withOpacity(.4), blurRadius: 30),
+                ],
+              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                // Header dialog
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 14, 14),
+                  child: Row(children: [
+                    Container(padding: const EdgeInsets.all(11),
+                      decoration: BoxDecoration(color: accent.withOpacity(.14),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: accent.withOpacity(.3))),
+                      child: Icon(icon, color: accent, size: 22)),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(label, style: TextStyle(color: kWhite, fontSize: 16, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(subtitle, style: TextStyle(color: mut(.4), fontSize: 10.5), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    ])),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(color: mut(.06), shape: BoxShape.circle),
+                        child: Icon(Icons.close_rounded, color: mut(.5), size: 18)),
+                    ),
+                  ]),
+                ),
+                Divider(height: 1, color: kBorder),
+                // List opsi (scrollable)
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(children: children),
+                  ),
+                ),
+              ]),
+            ),
+          ),
         ),
       ),
     );
