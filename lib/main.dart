@@ -1,0 +1,2070 @@
+import 'dart:async';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+void main() {
+  runZonedGuarded(() {
+    WidgetsFlutterBinding.ensureInitialized();
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ));
+    runApp(const WelcomeSahrulApp());
+  }, (error, stack) {
+    debugPrint('Uncaught (diredam, app tetap jalan): $error');
+  });
+}
+
+// ============================================================
+// PALET "FLIGHT DECK" + DUKUNGAN NIGHT / LIGHT
+// ============================================================
+// Notifier global untuk mode tema. true = night (default), false = light.
+final isNightNotifier = ValueNotifier<bool>(true);
+bool get _night => isNightNotifier.value;
+
+// Warna AKSEN tetap (sama di kedua mode — sudah cerah & kontras).
+const kCyan     = Color(0xFF00E5FF);
+const kGreen    = Color(0xFF34C759);
+const kYellow   = Color(0xFFE6A700);
+const kRed      = Color(0xFFFF4747);
+const kOrange   = Color(0xFFFF6B47);
+const kPurple   = Color(0xFFB47FFF);
+const kTeal     = Color(0xFF13B5A6);
+
+// Warna PERMUKAAN/TEKS — dinamis mengikuti mode.
+Color get kBg     => _night ? const Color(0xFF0A0A0F) : const Color(0xFFF2F4F8);
+Color get kPanel  => _night ? const Color(0xFF12121A) : const Color(0xFFFFFFFF);
+Color get kPanel2 => _night ? const Color(0xFF161622) : const Color(0xFFEDEFF5);
+Color get kBorder => _night ? const Color(0xFF1E1E2E) : const Color(0xFFE2E5EC);
+Color get kWhite  => _night ? Colors.white : const Color(0xFF12121A);
+
+// Teks samar (mengikuti mode supaya tetap terbaca di light).
+Color mut(double o) => _night
+    ? Colors.white.withOpacity(o)
+    : const Color(0xFF12121A).withOpacity(o.clamp(0.0, 1.0) * 0.9 + 0.05);
+Color glow(Color c, double o) => c.withOpacity(o);
+
+// ============================================================
+// APP ROOT
+// ============================================================
+class WelcomeSahrulApp extends StatelessWidget {
+  const WelcomeSahrulApp({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: isNightNotifier,
+      builder: (_, night, __) => MaterialApp(
+        title: 'Welcome Sahrul',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
+          scaffoldBackgroundColor: kBg,
+          fontFamily: 'sans-serif',
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: kCyan,
+            brightness: night ? Brightness.dark : Brightness.light,
+          ),
+        ),
+        home: const SplashScreen(),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// SPLASH
+// ============================================================
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1400))
+      ..forward();
+    Timer(const Duration(milliseconds: 1900), () {
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            transitionDuration: const Duration(milliseconds: 500),
+            pageBuilder: (_, a, __) =>
+                FadeTransition(opacity: a, child: const RootShell()),
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ScaleTransition(
+              scale: CurvedAnimation(parent: _c, curve: Curves.elasticOut),
+              child: Container(
+                width: 92,
+                height: 92,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [kCyan, Color(0xFF0090A8)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                        color: glow(kCyan, .45),
+                        blurRadius: 36,
+                        spreadRadius: 2),
+                  ],
+                ),
+                child: const Icon(Icons.bolt_rounded,
+                    color: Colors.black, size: 48),
+              ),
+            ),
+            const SizedBox(height: 24),
+            FadeTransition(
+              opacity: _c,
+              child: Text('Welcome Sahrul',
+                  style: TextStyle(
+                      color: kWhite,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -.5)),
+            ),
+            const SizedBox(height: 6),
+            FadeTransition(
+              opacity: _c,
+              child: Text('DEVICE CONTROL CENTER',
+                  style: TextStyle(
+                      color: glow(kCyan, .7),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 3)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// ROOT SHELL — bottom nav 4 tab
+// ============================================================
+class RootShell extends StatefulWidget {
+  const RootShell({super.key});
+  @override
+  State<RootShell> createState() => _RootShellState();
+}
+
+class _RootShellState extends State<RootShell> {
+  int _idx = 0;
+  final _pages = const [DashboardTab(), TweakTab(), ToolsTab(), AboutTab()];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(bottom: false, child: _pages[_idx]),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: kPanel,
+          border: Border(top: BorderSide(color: kBorder, width: 1)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _navItem(0, Icons.dashboard_rounded, 'Dashboard'),
+                _navItem(1, Icons.tune_rounded, 'Tweak'),
+                _navItem(2, Icons.build_rounded, 'Tools'),
+                _navItem(3, Icons.info_rounded, 'Tentang'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _navItem(int i, IconData icon, String label) {
+    final on = _idx == i;
+    return GestureDetector(
+      onTap: () => setState(() => _idx = i),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: on ? glow(kCyan, .12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 22, color: on ? kCyan : mut(.4)),
+            const SizedBox(height: 4),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: on ? FontWeight.w700 : FontWeight.w500,
+                    color: on ? kCyan : mut(.4))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// ROOT SERVICE
+// ============================================================
+class RootService {
+  static bool? _root;
+
+  static Future<bool> hasRoot() async {
+    if (_root != null) return _root!;
+    try {
+      final r = await Process.run('su', ['-c', 'id'])
+          .timeout(const Duration(seconds: 3));
+      _root = r.exitCode == 0;
+    } catch (_) {
+      _root = false;
+    }
+    return _root!;
+  }
+
+  static Future<String> run(String cmd) async {
+    try {
+      if (!await hasRoot()) return 'NO_ROOT';
+      final r = await Process.run('su', ['-c', cmd])
+          .timeout(const Duration(seconds: 6));
+      final out = r.stdout.toString().trim();
+      final err = r.stderr.toString().trim();
+      if (out.isEmpty && err.isNotEmpty) return 'NO_ROOT';
+      return out;
+    } catch (_) {
+      return 'NO_ROOT';
+    }
+  }
+
+  static bool bad(String v) => v == 'NO_ROOT' || v.trim().isEmpty;
+
+  static Future<List<int>> cores() async {
+    final r = await run(
+        'ls -d /sys/devices/system/cpu/cpu[0-9]* | sed "s#.*/cpu##"');
+    if (bad(r)) return [0];
+    final c = r
+        .split('\n')
+        .map((s) => int.tryParse(s.trim()))
+        .whereType<int>()
+        .toList();
+    return c.isEmpty ? [0] : c;
+  }
+
+  static Future<Map<String, String>> device() async {
+    try {
+      final man = await run('getprop ro.product.manufacturer');
+      final mod = await run('getprop ro.product.model');
+      final ver = await run('getprop ro.build.version.release');
+      final chip = await run('getprop ro.board.platform');
+      String name;
+      if (!bad(man) && !bad(mod)) {
+        name = mod.toLowerCase().contains(man.toLowerCase()) ? mod : '$man $mod';
+      } else if (!bad(mod)) {
+        name = mod;
+      } else {
+        name = 'Perangkat Android';
+      }
+      return {
+        'name': name,
+        'android': bad(ver) ? '-' : 'Android $ver',
+        'chipset': bad(chip) ? '-' : chip,
+      };
+    } catch (_) {
+      return {'name': 'Perangkat Android', 'android': '-', 'chipset': '-'};
+    }
+  }
+
+  // Refresh rate — kunci peak+min agar tidak adaptif (anti naik-turun)
+  // ===== REFRESH RATE (versi kuat, anti naik-turun) =====
+  // Kunci refresh rate dengan menulis ke SEMUA key yang dipakai vendor
+  // berbeda sekaligus. Agar benar-benar statis (tidak adaptif), peak=min=hz.
+  // Juga set SurfaceFlinger lewat service call sebagai penegasan di sebagian
+  // device yang mengabaikan settings provider.
+  static Future<String> setRefresh(int hz) => run('''
+    settings put system peak_refresh_rate $hz.0 2>/dev/null
+    settings put system min_refresh_rate $hz.0 2>/dev/null
+    settings put system user_refresh_rate $hz 2>/dev/null
+    settings put system miui_refresh_rate $hz 2>/dev/null
+    settings put system oplus_customize_refresh_rate $hz 2>/dev/null
+    settings put global oplus_force_screen_refresh_rate $hz 2>/dev/null
+    settings put secure refresh_rate_mode 1 2>/dev/null
+    echo OK''');
+
+  // Membaca refresh rate yang BENAR-BENAR aktif. Mencoba beberapa sumber
+  // berurutan karena format dumpsys beda tiap vendor; ambil yang pertama valid.
+  static Future<String> currentRefresh() async {
+    // 1) Sumber paling akurat: fps aktif dari SurfaceFlinger
+    final candidates = <String>[
+      // ambil angka "fps" yang muncul setelah label refresh/active mode
+      'dumpsys display | grep -iE "mActiveModeId|fps=" | grep -oE "fps=[0-9.]+" | head -1 | grep -oE "[0-9.]+"',
+      'dumpsys SurfaceFlinger | grep -iE "refresh.?rate" | grep -oE "[0-9]+\\.[0-9]+" | head -1',
+      'dumpsys display | grep -iE "renderFrameRate|refreshRate" | grep -oE "[0-9]+\\.[0-9]+" | head -1',
+    ];
+    for (final c in candidates) {
+      final r = await run(c);
+      if (!bad(r)) {
+        final p = double.tryParse(r.trim());
+        if (p != null && p >= 20 && p <= 240) return p.round().toString();
+      }
+    }
+    // 2) Fallback: nilai yang kita set sendiri
+    final peak = await run('settings get system peak_refresh_rate');
+    if (!bad(peak)) {
+      final p = double.tryParse(peak.trim());
+      if (p != null) return p.round().toString();
+    }
+    return 'NO_ROOT';
+  }
+
+  static Future<String> clearRam() => run('''
+    for pkg in \$(cmd package list packages -3 | cut -f2 -d:); do
+      am force-stop \$pkg 2>/dev/null
+    done
+    echo OK''');
+
+  // ===== UTILITAS TOOLS TAMBAHAN =====
+  // Flush DNS: bersihkan cache resolver agar koneksi memakai DNS terbaru.
+  static Future<String> flushDns() => run('''
+    ndc resolver flushdefaultif 2>/dev/null
+    ndc resolver flushnet 0 2>/dev/null
+    setprop net.dns.cache.flush 1 2>/dev/null
+    echo OK''');
+
+  // Refresh sinyal: toggle airplane mode cepat (off->on->off) supaya modem
+  // mencari ulang jaringan. Aman, memakai cmd connectivity / settings.
+  static Future<String> refreshSignal() => run('''
+    settings put global airplane_mode_on 1 2>/dev/null
+    am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true 2>/dev/null
+    cmd connectivity airplane-mode enable 2>/dev/null
+    sleep 2
+    settings put global airplane_mode_on 0 2>/dev/null
+    am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false 2>/dev/null
+    cmd connectivity airplane-mode disable 2>/dev/null
+    echo OK''');
+
+  // Bersihkan cache semua aplikasi (lega penyimpanan).
+  static Future<String> trimCaches() =>
+      run('pm trim-caches 999999999999 2>/dev/null; echo OK');
+
+  // Reset statistik baterai (kalibrasi penghitungan, bukan kapasitas fisik).
+  static Future<String> resetBatteryStats() =>
+      run('dumpsys batterystats --reset 2>/dev/null; echo OK');
+
+  static Future<Map<String, String>> ram() async {
+    try {
+      final t = await run(
+          "cat /proc/meminfo | grep MemTotal | awk '{print \$2}'");
+      final a = await run(
+          "cat /proc/meminfo | grep MemAvailable | awk '{print \$2}'");
+      final tMB = (int.tryParse(t) ?? 0) ~/ 1024;
+      final aMB = (int.tryParse(a) ?? 0) ~/ 1024;
+      if (tMB == 0) return {'total': '-', 'avail': '-', 'used': '-', 'pct': '0'};
+      final u = tMB - aMB;
+      return {
+        'total': '$tMB MB',
+        'avail': '$aMB MB',
+        'used': '$u MB',
+        'pct': '${((u / tMB) * 100).round()}',
+      };
+    } catch (_) {
+      return {'total': '-', 'avail': '-', 'used': '-', 'pct': '0'};
+    }
+  }
+
+  // ===== CPU GOVERNOR (versi kuat & maksimal) =====
+  // Perbaikan utama:
+  // 1. Tulis ke POLICY groups (/cpufreq/policy*) — ini sumber sebenarnya
+  //    pada HP modern (per-cluster), bukan cuma per-cpu individual.
+  // 2. Tetap tulis per-cpu sebagai cadangan untuk kernel lama.
+  // 3. Untuk "performance": kunci scaling_min_freq = scaling_max_freq supaya
+  //    benar-benar maksimal dan tidak turun (ini yang sebelumnya bikin
+  //    "belum maksimal"). Untuk governor lain, kembalikan min ke cpuinfo_min.
+  // 4. Semua tulisan diberi "2>/dev/null" + cek file ada, agar core/policy
+  //    yang offline atau tidak ada tidak memicu error.
+  static Future<String> setGov(String g) async {
+    final cs = await cores();
+    final perCpu = cs
+        .map((i) =>
+            '[ -f /sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor ] && '
+            'echo $g > /sys/devices/system/cpu/cpu$i/cpufreq/scaling_governor 2>/dev/null')
+        .join('\n');
+
+    // Bagian frekuensi.
+    // PERBAIKAN PENTING (terbukti dari tes di device):
+    //  - scaling_max_freq HARUS ditulis SEBELUM scaling_min_freq. Kalau min
+    //    ditulis lebih dulu ke nilai > max yang berlaku, kernel menolak →
+    //    inilah yang dulu bikin clock mentok (min/max gagal naik).
+    //  - Governor di-set lebih dulu, baru frekuensi.
+    //  - Path MediaTek /proc/ppm & /proc/cpufreq tidak ada di device ini,
+    //    jadi dihapus total (sebelumnya cuma sia-sia).
+    String freqPart;
+    if (g == 'performance') {
+      freqPart = '''
+        for P in /sys/devices/system/cpu/cpufreq/policy*; do
+          [ -d "\$P" ] || continue
+          echo performance > "\$P/scaling_governor" 2>/dev/null
+          MAXF=\$(cat "\$P/cpuinfo_max_freq" 2>/dev/null)
+          if [ -n "\$MAXF" ]; then
+            # Urutan benar: naikkan max DULU, baru kunci min = max.
+            echo "\$MAXF" > "\$P/scaling_max_freq" 2>/dev/null
+            echo "\$MAXF" > "\$P/scaling_min_freq" 2>/dev/null
+          fi
+        done''';
+    } else {
+      freqPart = '''
+        for P in /sys/devices/system/cpu/cpufreq/policy*; do
+          [ -d "\$P" ] || continue
+          echo $g > "\$P/scaling_governor" 2>/dev/null
+          MINF=\$(cat "\$P/cpuinfo_min_freq" 2>/dev/null)
+          MAXF=\$(cat "\$P/cpuinfo_max_freq" 2>/dev/null)
+          # Urutan benar: turunkan min DULU, baru buka max ke batas penuh.
+          [ -n "\$MINF" ] && echo "\$MINF" > "\$P/scaling_min_freq" 2>/dev/null
+          [ -n "\$MAXF" ] && echo "\$MAXF" > "\$P/scaling_max_freq" 2>/dev/null
+        done''';
+    }
+
+    return run('''
+$freqPart
+$perCpu
+# Verifikasi: cek prime cluster (policy7) benar-benar naik ke max-nya.
+PRIME=/sys/devices/system/cpu/cpufreq/policy7
+if [ -d "\$PRIME" ]; then
+  CURMAX=\$(cat "\$PRIME/scaling_max_freq" 2>/dev/null)
+  HWMAX=\$(cat "\$PRIME/cpuinfo_max_freq" 2>/dev/null)
+  GOVNOW=\$(cat "\$PRIME/scaling_governor" 2>/dev/null)
+else
+  CURMAX=\$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 2>/dev/null)
+  HWMAX=\$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null)
+  GOVNOW=\$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null)
+fi
+if [ "\$GOVNOW" = "$g" ]; then
+  if [ "$g" = "performance" ] && [ "\$CURMAX" != "\$HWMAX" ]; then
+    echo "PARTIAL:\$CURMAX/\$HWMAX"
+  else
+    echo OK
+  fi
+else
+  echo "FAIL:\$GOVNOW"
+fi
+''');
+  }
+
+  static Future<String> gov() =>
+      run('cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor');
+
+  // Baca clock TERTINGGI dari semua core (bukan cuma cpu0 yang cluster little
+  // 2GHz). Ini yang sebelumnya bikin tampilan mentok di 2000 MHz.
+  static Future<String> freq() => run('''
+    MAX=0
+    for C in /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq; do
+      [ -f "\$C" ] || continue
+      F=\$(cat "\$C" 2>/dev/null)
+      [ -n "\$F" ] && [ "\$F" -gt "\$MAX" ] && MAX=\$F
+    done
+    if [ "\$MAX" -gt 0 ]; then
+      awk "BEGIN{printf \\"%.0f MHz\\", \$MAX/1000}"
+    else
+      echo NO_ROOT
+    fi
+  ''');
+
+  // Frekuensi maksimum tertinggi yang didukung perangkat (untuk info).
+  static Future<String> maxFreq() => run('''
+    MAX=0
+    for C in /sys/devices/system/cpu/cpu*/cpufreq/cpuinfo_max_freq; do
+      [ -f "\$C" ] || continue
+      F=\$(cat "\$C" 2>/dev/null)
+      [ -n "\$F" ] && [ "\$F" -gt "\$MAX" ] && MAX=\$F
+    done
+    if [ "\$MAX" -gt 0 ]; then
+      awk "BEGIN{printf \\"%.0f MHz\\", \$MAX/1000}"
+    else
+      echo NO_ROOT
+    fi
+  ''');
+
+  static Future<String> lockBand() => run('''
+    echo "524288" > /data/local/tmp/bandlock.conf
+    echo "AT+EPBSE=524288" > /dev/ttyC0 2>/dev/null
+    echo OK''');
+  static Future<String> unlockBand() => run('''
+    echo "0" > /data/local/tmp/bandlock.conf
+    echo "AT+EPBSE=0" > /dev/ttyC0 2>/dev/null
+    echo OK''');
+  static Future<String> bandStatus() =>
+      run('cat /data/local/tmp/bandlock.conf 2>/dev/null || echo "0"');
+
+  static Future<String> thermalEsports() =>
+      run('setprop persist.thermal.config esports && echo OK');
+  static Future<String> thermalNormal() =>
+      run('setprop persist.thermal.config default && echo OK');
+  static Future<String> thermal() => run('getprop persist.thermal.config');
+
+  // ===== MATIKAN LAYAR =====
+  // Mengirim event tombol power (keycode 26) lewat input subsistem.
+  // Setara menekan tombol power fisik sekali — layar langsung mati.
+  static Future<String> screenOff() =>
+      run('input keyevent 26 && echo OK');
+
+  // ===== DOUBLE TAP TO WAKE =====
+  // Khusus Infinix/Tecno (Transsion OS): key yang BENAR & AMAN adalah
+  // `os_action_tapping_wake` di tabel SYSTEM. Ini terbukti dari pemeriksaan
+  // langsung di device — saat fitur diaktifkan dari menu Pengaturan bawaan,
+  // hanya key inilah yang berubah jadi 1.
+  //
+  // PENTING: kita TIDAK menulis ke node sysfs touchscreen (Goodix) lagi.
+  // Pada device ini, menulis ke node power/wakeup touchscreen MEMICU REBOOT.
+  // Menulis via settings provider jauh lebih aman dan itulah jalur resmi
+  // yang dibaca framework Transsion untuk mengaktifkan gesture wake.
+  //
+  // Masalah "sering ke-disable sendiri" diatasi dengan menulis ke beberapa
+  // key terkait sekaligus + key AOSP sebagai cadangan, lalu app bisa
+  // memanggil reapply() bila perlu.
+  static Future<String> enableDoubleTapWake() => run('''
+    settings put system os_action_tapping_wake 1 2>/dev/null
+    settings put system double_tap_to_wake 1 2>/dev/null
+    settings put secure double_tap_to_wake 1 2>/dev/null
+    settings put secure gesture_double_tap_to_wake 1 2>/dev/null
+    settings put global welcome_sahrul_dtw_pref 1 2>/dev/null
+    RESULT=\$(settings get system os_action_tapping_wake 2>/dev/null)
+    if [ "\$RESULT" = "1" ]; then echo OK; else echo "FAIL:\$RESULT"; fi''');
+
+  static Future<String> disableDoubleTapWake() => run('''
+    settings put system os_action_tapping_wake 0 2>/dev/null
+    settings put system double_tap_to_wake 0 2>/dev/null
+    settings put secure double_tap_to_wake 0 2>/dev/null
+    settings put secure gesture_double_tap_to_wake 0 2>/dev/null
+    settings put global welcome_sahrul_dtw_pref 0 2>/dev/null
+    echo OK''');
+
+  // Status dibaca dari key Transsion yang benar.
+  static Future<String> doubleTapWakeStatus() async {
+    final r = await run('settings get system os_action_tapping_wake');
+    if (!bad(r) && r.trim() == '1') return '1';
+    return '0';
+  }
+
+  // AUTO RE-APPLY:
+  // Masalah "ke-disable sendiri setelah hemat daya + reboot" terjadi karena
+  // sistem/penghemat baterai me-reset os_action_tapping_wake ke 0 saat boot.
+  // App menyimpan PREFERENSI user di key `welcome_sahrul_dtw_pref` (key custom
+  // milik app, tidak diutak-atik sistem). Saat app dibuka, kalau preferensi
+  // user = 1 TAPI setting aktual sudah ke-reset jadi 0, app menulis ulang
+  // otomatis — jadi user tidak perlu mengaktifkan manual tiap habis reboot.
+  static Future<void> reapplyDoubleTapWakeIfNeeded() async {
+    try {
+      final pref = await run('settings get global welcome_sahrul_dtw_pref');
+      if (bad(pref) || pref.trim() != '1') return; // user belum pernah aktifkan
+      final actual = await run('settings get system os_action_tapping_wake');
+      if (actual.trim() != '1') {
+        // ke-reset oleh sistem — pulihkan
+        await run(
+            'settings put system os_action_tapping_wake 1 2>/dev/null; echo OK');
+      }
+    } catch (_) {
+      // diam saja; ini best-effort, tidak boleh bikin app gagal start
+    }
+  }
+
+  // Key Transsion ini SELALU tersedia di Infinix/Tecno, jadi fitur dianggap
+  // didukung. (Tidak lagi bergantung pada node sysfs yang berisiko.)
+  static Future<bool> doubleTapWakeNodeExists() async {
+    final r = await run('settings get system os_action_tapping_wake');
+    // Walau nilainya "null"/0, key-nya tetap bisa di-set; anggap didukung
+    // selama shell bisa membaca settings (root aktif).
+    return !bad(r);
+  }
+
+  // ===== DISABLE THERMAL TOTAL =====
+  // Mematikan semua thermal throttling: thermal-engine service (MediaTek/QCOM),
+  // mtk_thermal, dan node thermal_zone mode. Disimpan flag agar UI tahu status.
+  // PERINGATAN: menghilangkan proteksi panas — dipakai dengan risiko sendiri.
+  static Future<String> disableThermal() => run('''
+    # Hentikan service thermal-engine (nama beda tiap vendor)
+    stop thermal-engine 2>/dev/null
+    stop vendor.thermal-engine 2>/dev/null
+    stop mtk_thermal 2>/dev/null
+    setprop persist.vendor.disable.thermal.control 1 2>/dev/null
+    setprop persist.thermal.config disabled 2>/dev/null
+    # Set semua thermal_zone ke mode disabled
+    for Z in /sys/class/thermal/thermal_zone*; do
+      [ -f "\$Z/mode" ] && echo disabled > "\$Z/mode" 2>/dev/null
+    done
+    # MediaTek: matikan thermal policy
+    echo 0 > /proc/mtk_thermal/mtktscpu/mtktscpu_dump 2>/dev/null
+    echo 0 > /sys/kernel/thermal/mode 2>/dev/null
+    echo OK''');
+
+  static Future<String> enableThermal() => run('''
+    # Aktifkan kembali proteksi thermal
+    start thermal-engine 2>/dev/null
+    start vendor.thermal-engine 2>/dev/null
+    start mtk_thermal 2>/dev/null
+    setprop persist.vendor.disable.thermal.control 0 2>/dev/null
+    setprop persist.thermal.config default 2>/dev/null
+    for Z in /sys/class/thermal/thermal_zone*; do
+      [ -f "\$Z/mode" ] && echo enabled > "\$Z/mode" 2>/dev/null
+    done
+    echo 1 > /sys/kernel/thermal/mode 2>/dev/null
+    echo OK''');
+
+  static Future<String> thermalDisabledStatus() =>
+      run('getprop persist.vendor.disable.thermal.control');
+
+  static Future<String> rebootSystem() => run('reboot');
+  static Future<String> rebootRecovery() => run('reboot recovery');
+  static Future<String> rebootFastboot() => run('reboot bootloader');
+
+  static Future<String> battery() async {
+    final r = await run('cat /sys/class/power_supply/battery/capacity');
+    if (!bad(r)) return r;
+    return run('cat /sys/class/power_supply/bms/capacity');
+  }
+
+  static Future<String> temp() async {
+    for (var i = 0; i < 6; i++) {
+      final type =
+          await run('cat /sys/class/thermal/thermal_zone$i/type 2>/dev/null');
+      if (type.toLowerCase().contains('cpu') ||
+          type.toLowerCase().contains('tsens')) {
+        final t = await run(
+            "cat /sys/class/thermal/thermal_zone$i/temp | awk '{printf \"%.1f\", \$1/1000}'");
+        if (!bad(t)) {
+          final v = double.tryParse(t) ?? 0;
+          final f = v > 200 ? v / 1000 : v;
+          return '${f.toStringAsFixed(1)}°C';
+        }
+      }
+    }
+    final t = await run(
+        "cat /sys/class/thermal/thermal_zone0/temp | awk '{printf \"%.1f\", \$1/1000}'");
+    if (bad(t)) return 'NO_ROOT';
+    final v = double.tryParse(t) ?? 0;
+    final f = v > 200 ? v / 1000 : v;
+    return '${f.toStringAsFixed(1)}°C';
+  }
+
+  static Future<Map<String, String>> sysInfo() async {
+    try {
+      if (!await hasRoot()) {
+        return {'root': 'false'};
+      }
+      final b = await battery();
+      final tp = await temp();
+      final fq = await freq();
+      final mfq = await maxFreq();
+      final gv = await gov();
+      final rr = await currentRefresh();
+      final th = await thermal();
+      final tdis = await thermalDisabledStatus();
+      final bn = await bandStatus();
+      return {
+        'battery': bad(b) ? '-' : '$b%',
+        'temp': bad(tp) ? '-' : tp,
+        'freq': bad(fq) ? '-' : fq,
+        'max_freq': bad(mfq) ? '-' : mfq,
+        'gov': bad(gv) ? '-' : gv,
+        'refresh': bad(rr) ? '-' : '${rr}Hz',
+        'thermal': bad(th) ? 'default' : th,
+        'thermal_disabled': tdis.trim() == '1' ? 'true' : 'false',
+        'band': bn == '524288' ? 'B1+B3+B8' : 'Auto',
+        'root': 'true',
+      };
+    } catch (_) {
+      return {'root': 'false'};
+    }
+  }
+}
+
+// ============================================================
+// SHARED STATE (sederhana, via ValueNotifier global)
+// ============================================================
+final sysNotifier = ValueNotifier<Map<String, String>>({});
+final ramNotifier = ValueNotifier<Map<String, String>>({});
+final deviceNotifier =
+    ValueNotifier<Map<String, String>>({'name': 'Memuat...', 'android': '-'});
+final busyNotifier = ValueNotifier<bool>(false);
+final toastNotifier = ValueNotifier<String>('');
+
+Timer? _pollTimer;
+void startPolling() {
+  _refreshAll();
+  _pollTimer ??=
+      Timer.periodic(const Duration(seconds: 5), (_) => _refreshAll());
+}
+
+Future<void> _refreshAll() async {
+  try {
+    sysNotifier.value = await RootService.sysInfo();
+    ramNotifier.value = await RootService.ram();
+  } catch (_) {}
+}
+
+Future<void> loadDevice() async {
+  try {
+    deviceNotifier.value = await RootService.device();
+  } catch (_) {}
+}
+
+void showToast(String msg) {
+  toastNotifier.value = msg;
+  Timer(const Duration(seconds: 3), () {
+    if (toastNotifier.value == msg) toastNotifier.value = '';
+  });
+}
+
+Future<void> runAction(Future<String> Function() action,
+    {required String ok, String? noRoot}) async {
+  if (busyNotifier.value) return;
+  busyNotifier.value = true;
+  try {
+    final r = await action().timeout(const Duration(seconds: 9));
+    if (RootService.bad(r)) {
+      showToast('⚠️ ${noRoot ?? 'Fitur ini butuh akses root aktif.'}');
+    } else if (r.startsWith('FAIL:')) {
+      // Governor ditolak kernel — tampilkan nilai aktual yang berlaku.
+      final actual = r.substring(5).trim();
+      showToast(actual.isEmpty
+          ? '⚠️ Mode tidak didukung kernel device ini.'
+          : '⚠️ Ditolak kernel. Aktif sekarang: "$actual"');
+    } else if (r.startsWith('PARTIAL:')) {
+      // Governor performance aktif, tapi max belum 100% (kemungkinan thermal
+      // throttle menahan). Tampilkan progres jujur dalam MHz.
+      final parts = r.substring(8).trim().split('/');
+      final cur = (int.tryParse(parts.isNotEmpty ? parts[0] : '0') ?? 0) ~/ 1000;
+      final hw = (int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0) ~/ 1000;
+      showToast('⚡ Performa aktif: $cur MHz (batas $hw MHz). '
+          'Thermal menahan — matikan thermal untuk penuh.');
+    } else {
+      showToast(ok);
+    }
+    await _refreshAll();
+  } catch (_) {
+    showToast('⚠️ Gagal menjalankan aksi. Coba lagi.');
+  } finally {
+    busyNotifier.value = false;
+  }
+}
+
+// ============================================================
+// DASHBOARD TAB
+// ============================================================
+class DashboardTab extends StatefulWidget {
+  const DashboardTab({super.key});
+  @override
+  State<DashboardTab> createState() => _DashboardTabState();
+}
+
+class _DashboardTabState extends State<DashboardTab> {
+  @override
+  void initState() {
+    super.initState();
+    loadDevice();
+    startPolling();
+    // Pulihkan otomatis "Ketuk 2x untuk Bangun" jika sebelumnya diaktifkan
+    // user tapi ke-reset sistem (mis. setelah hemat daya + reboot).
+    RootService.reapplyDoubleTapWakeIfNeeded();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: _refreshAll,
+      color: kCyan,
+      backgroundColor: kPanel,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        children: [
+          _header(),
+          ValueListenableBuilder<String>(
+            valueListenable: toastNotifier,
+            builder: (_, msg, __) => msg.isEmpty
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: _banner(msg)),
+          ),
+          ValueListenableBuilder<Map<String, String>>(
+            valueListenable: sysNotifier,
+            builder: (_, sys, __) {
+              if (sys['root'] == 'false') {
+                return Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: _banner(
+                      '⚠️ Akses root belum aktif. Berikan izin root lalu tarik untuk refresh.',
+                      color: kYellow),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+          const SizedBox(height: 24),
+          _sectionTitle('STATUS REAL-TIME', kCyan),
+          const SizedBox(height: 12),
+          _infoGrid(),
+          const SizedBox(height: 24),
+          _sectionTitle('AKSI CEPAT', kGreen),
+          const SizedBox(height: 12),
+          _quickActions(),
+          const SizedBox(height: 24),
+          _sectionTitle('LAYAR & GESTURE', kTeal),
+          const SizedBox(height: 12),
+          _controlCard(
+            Icons.power_settings_new_rounded,
+            'Matikan Layar',
+            'Sama seperti menekan tombol power',
+            'Matikan',
+            kTeal,
+            () => runAction(RootService.screenOff, ok: '✅ Layar dimatikan'),
+          ),
+          const SizedBox(height: 10),
+          const _DoubleTapWakeTile(),
+        ],
+      ),
+    );
+  }
+
+  Widget _header() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+            colors: [kPanel, kPanel2],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: glow(kCyan, .15)),
+      ),
+      child: Row(children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(colors: [kCyan, Color(0xFF0090A8)]),
+            boxShadow: [
+              BoxShadow(color: glow(kCyan, .35), blurRadius: 14, spreadRadius: -2)
+            ],
+          ),
+          child: const Icon(Icons.bolt_rounded, color: Colors.black, size: 24),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: ValueListenableBuilder<Map<String, String>>(
+            valueListenable: deviceNotifier,
+            builder: (_, d, __) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Welcome Sahrul',
+                    style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        color: kWhite,
+                        letterSpacing: -.3)),
+                const SizedBox(height: 2),
+                Text('${d['name']} • ${d['android']}',
+                    style: TextStyle(fontSize: 11.5, color: mut(.45)),
+                    overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+        ),
+        themeToggleButton(),
+        const SizedBox(width: 8),
+        ValueListenableBuilder<bool>(
+          valueListenable: busyNotifier,
+          builder: (_, busy, __) => busy
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: kCyan))
+              : GestureDetector(
+                  onTap: _refreshAll,
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                        color: mut(.05),
+                        borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.refresh_rounded,
+                        color: kCyan, size: 20),
+                  ),
+                ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _infoGrid() {
+    return ValueListenableBuilder<Map<String, String>>(
+      valueListenable: sysNotifier,
+      builder: (_, sys, __) {
+        return ValueListenableBuilder<Map<String, String>>(
+          valueListenable: ramNotifier,
+          builder: (_, ram, __) {
+            final batV =
+                double.tryParse((sys['battery'] ?? '').replaceAll('%', '')) ?? 0;
+            final tmpV =
+                double.tryParse((sys['temp'] ?? '').replaceAll('°C', '')) ?? 0;
+            final ramP = (int.tryParse(ram['pct'] ?? '0') ?? 0) / 100;
+            return GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 1.25,
+              children: [
+                _ring(Icons.battery_charging_full_rounded, 'BATERAI',
+                    sys['battery'] ?? '-', kGreen,
+                    pct: sys['battery'] != null ? batV / 100 : null),
+                _ring(Icons.thermostat_rounded, 'SUHU CPU', sys['temp'] ?? '-',
+                    kOrange,
+                    pct: sys['temp'] != null ? (tmpV / 90).clamp(0, 1) : null),
+                _ring(Icons.memory_rounded, 'RAM TERPAKAI', ram['used'] ?? '-',
+                    kYellow,
+                    pct: ram['used'] != null ? ramP : null),
+                _ring(Icons.speed_rounded, 'CPU FREQ', sys['freq'] ?? '-', kCyan),
+                _ring(Icons.monitor_rounded, 'REFRESH', sys['refresh'] ?? '-',
+                    kPurple),
+                _ring(Icons.signal_cellular_alt_rounded, 'LTE BAND',
+                    sys['band'] ?? '-', kTeal),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _quickActions() {
+    return Row(children: [
+      Expanded(
+        child: _quickBtn(Icons.cleaning_services_rounded, 'Bersihkan RAM',
+            kOrange, () {
+          runAction(RootService.clearRam, ok: '✅ RAM dibersihkan!');
+        }),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: _quickBtn(Icons.rocket_launch_rounded, 'Mode Performa', kYellow,
+            () {
+          runAction(() => RootService.setGov('performance'),
+              ok: '✅ CPU mode Performa aktif!');
+        }),
+      ),
+    ]);
+  }
+
+  Widget _quickBtn(IconData ic, String label, Color c, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        decoration: BoxDecoration(
+          color: kPanel,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: glow(c, .25)),
+        ),
+        child: Column(children: [
+          Icon(ic, color: c, size: 26),
+          const SizedBox(height: 8),
+          Text(label,
+              style: TextStyle(
+                  color: kWhite, fontSize: 12.5, fontWeight: FontWeight.w600)),
+        ]),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// TWEAK TAB
+// ============================================================
+class TweakTab extends StatefulWidget {
+  const TweakTab({super.key});
+  @override
+  State<TweakTab> createState() => _TweakTabState();
+}
+
+class _TweakTabState extends State<TweakTab> {
+  int _hz = 60;
+  String _gov = 'schedutil';
+  DateTime _lastUserPick = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // Sinkronkan tampilan dengan kondisi NYATA sistem, tapi jangan timpa
+  // pilihan user dalam 6 detik setelah ia menekan tombol (biar tidak
+  // "lompat" saat command masih diterapkan).
+  void _syncFromSystem(Map<String, String> sys) {
+    final since = DateTime.now().difference(_lastUserPick).inSeconds;
+    if (since < 6) return;
+    final realGov = sys['gov'];
+    if (realGov != null && realGov != '-' && realGov != _gov) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _gov = realGov);
+      });
+    }
+    final realRr =
+        int.tryParse((sys['refresh'] ?? '').replaceAll('Hz', '').trim());
+    if (realRr != null && realRr != _hz && [40, 60, 90, 120, 144].contains(realRr)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _hz = realRr);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Map<String, String>>(
+      valueListenable: sysNotifier,
+      builder: (_, sys, __) {
+        _syncFromSystem(sys);
+        final bandLocked = sys['band'] != null && sys['band'] != 'Auto';
+        final esports = sys['thermal'] == 'esports';
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          children: [
+            pageTitleRow(
+                'Tweak Performa', 'Atur perilaku perangkat sesuai kebutuhanmu'),
+            const SizedBox(height: 24),
+
+            _sectionTitle('REFRESH RATE', kPurple),
+            const SizedBox(height: 12),
+            _refreshCard(sys),
+            const SizedBox(height: 22),
+
+            _sectionTitle('CPU GOVERNOR', kYellow),
+            const SizedBox(height: 12),
+            _govCard(sys),
+            const SizedBox(height: 22),
+
+            _sectionTitle('LTE BAND LOCK', kTeal),
+            const SizedBox(height: 12),
+            _controlCard(
+              Icons.cell_tower_rounded,
+              'Lock Band Tri Indonesia',
+              bandLocked ? 'Terkunci: B1 + B3 + B8' : 'Mode: Auto (semua band)',
+              bandLocked ? 'Lepas' : 'Lock',
+              bandLocked ? kTeal : kPurple,
+              () => runAction(
+                bandLocked ? RootService.unlockBand : RootService.lockBand,
+                ok: bandLocked ? '✅ Band kembali Auto' : '✅ Band dikunci Tri',
+                noRoot: 'Lock band butuh dukungan modem khusus & root.',
+              ),
+            ),
+            const SizedBox(height: 22),
+
+            _sectionTitle('MODE THERMAL', kOrange),
+            const SizedBox(height: 12),
+            _controlCard(
+              Icons.sports_esports_rounded,
+              'Mode Esports (Gaming)',
+              esports ? 'Aktif: thermal dibuka' : 'Aktif: Normal',
+              esports ? 'Normal' : 'Aktifkan',
+              esports ? kGreen : kOrange,
+              () => runAction(
+                esports
+                    ? RootService.thermalNormal
+                    : RootService.thermalEsports,
+                ok: esports ? '✅ Thermal Normal' : '✅ Mode Esports aktif!',
+                noRoot: 'Thermal profile ini tak didukung ROM kamu.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildDisableThermalCard(context, sys),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDisableThermalCard(
+      BuildContext context, Map<String, String> sys) {
+    final off = sys['thermal_disabled'] == 'true';
+    final tempStr = (sys['temp'] ?? '').replaceAll('°C', '');
+    final tempVal = double.tryParse(tempStr) ?? 0;
+    final hot = tempVal >= 48;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kPanel,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+            color: off ? kRed : kBorder, width: off ? 1.5 : 1),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(
+                color: glow(kRed, .1),
+                borderRadius: BorderRadius.circular(13)),
+            child: const Icon(Icons.local_fire_department_rounded,
+                color: kRed, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Disable Thermal (Total)',
+                      style: TextStyle(
+                          color: kWhite,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 3),
+                  Text(
+                      off
+                          ? '🔴 Proteksi panas DIMATIKAN'
+                          : 'Lepas semua batas suhu (berisiko)',
+                      style: TextStyle(
+                          color: off ? kRed : mut(.45), fontSize: 11.5)),
+                ]),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton(
+            onPressed: () {
+              if (off) {
+                runAction(RootService.enableThermal,
+                    ok: '✅ Proteksi thermal diaktifkan kembali');
+              } else {
+                _confirmDisableThermal(context);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: off ? glow(kGreen, .15) : glow(kRed, .15),
+              foregroundColor: off ? kGreen : kRed,
+              side: BorderSide(color: off ? kGreen : kRed),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(11)),
+              elevation: 0,
+            ),
+            child: Text(off ? 'Aktifkan' : 'Matikan',
+                style: const TextStyle(
+                    fontSize: 11.5, fontWeight: FontWeight.bold)),
+          ),
+        ]),
+        if (off && hot) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(
+              color: glow(kRed, .12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: glow(kRed, .5)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.warning_amber_rounded, color: kRed, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                    'Suhu ${sys['temp']} — sudah panas! Sebaiknya aktifkan kembali thermal.',
+                    style: const TextStyle(
+                        color: kRed, fontSize: 11.5, height: 1.3)),
+              ),
+            ]),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  void _confirmDisableThermal(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kPanel,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          const Icon(Icons.warning_amber_rounded, color: kRed, size: 22),
+          const SizedBox(width: 8),
+          Text('Peringatan', style: TextStyle(color: kWhite, fontSize: 17)),
+        ]),
+        content: Text(
+          'Mematikan thermal akan menghilangkan SEMUA proteksi panas perangkat.\n\n'
+          'Risiko: HP cepat panas, baterai bisa rusak/menggembung, dan komponen '
+          'bisa rusak permanen jika dibiarkan terlalu lama.\n\n'
+          'Gunakan hanya sebentar saat gaming, dan aktifkan kembali setelahnya. '
+          'Lanjutkan?',
+          style: TextStyle(color: mut(.7), fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: kRed, foregroundColor: Colors.white),
+            onPressed: () {
+              Navigator.pop(ctx);
+              runAction(RootService.disableThermal,
+                  ok: '🔴 Thermal dimatikan — pantau suhu!',
+                  noRoot: 'Tidak bisa mematikan thermal di ROM ini.');
+            },
+            child: const Text('Ya, Matikan'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _refreshCard(Map<String, String> sys) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: kPanel,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: kBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text('Terkunci:', style: TextStyle(color: mut(.55), fontSize: 12.5)),
+          const SizedBox(width: 6),
+          Text('${_hz}Hz',
+              style: const TextStyle(
+                  color: kPurple,
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5)),
+          const Spacer(),
+          Text('Aktual: ${sys['refresh'] ?? '-'}',
+              style: TextStyle(
+                  color: mut(.35), fontSize: 11, fontFamily: 'monospace')),
+        ]),
+        const SizedBox(height: 14),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [40, 60, 90, 120, 144].map((hz) {
+            final on = _hz == hz;
+            return GestureDetector(
+              onTap: () {
+                setState(() => _hz = hz);
+                _lastUserPick = DateTime.now();
+                runAction(() => RootService.setRefresh(hz),
+                    ok: '✅ Refresh dikunci ${hz}Hz',
+                    noRoot: 'Device membatasi refresh via root.');
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: on ? kPurple : mut(.04),
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: on ? kPurple : Colors.transparent),
+                ),
+                child: Text('${hz}Hz',
+                    style: TextStyle(
+                        color: on ? Colors.black : kWhite,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12.5)),
+              ),
+            );
+          }).toList(),
+        ),
+      ]),
+    );
+  }
+
+  Widget _govCard(Map<String, String> sys) {
+    final opts = [
+      ['powersave', 'Hemat Daya', Icons.battery_saver_rounded, kGreen],
+      ['schedutil', 'Seimbang', Icons.tune_rounded, kCyan],
+      ['performance', 'Performa', Icons.rocket_launch_rounded, kYellow],
+    ];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: kPanel,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: kBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(
+                color: glow(kCyan, .1),
+                borderRadius: BorderRadius.circular(13)),
+            child: const Icon(Icons.bolt_rounded, color: kCyan, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Mode Performa CPU',
+                    style: TextStyle(
+                        color: kWhite,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(height: 3),
+                Text('Governor aktif: ${sys['gov'] ?? 'schedutil'}',
+                    style: TextStyle(color: mut(.45), fontSize: 11.5)),
+              ],
+            ),
+          ),
+        ]),
+        const SizedBox(height: 14),
+        Row(
+          children: opts.map((o) {
+            final val = o[0] as String;
+            final label = o[1] as String;
+            final ic = o[2] as IconData;
+            final c = o[3] as Color;
+            final on = _gov == val;
+            final last = o == opts.last;
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: last ? 0 : 8),
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() => _gov = val);
+                    _lastUserPick = DateTime.now();
+                    runAction(() => RootService.setGov(val),
+                        ok: '✅ Governor: $val',
+                        noRoot: 'Governor ini tak didukung kernel.');
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: on ? glow(c, .15) : mut(.04),
+                      borderRadius: BorderRadius.circular(11),
+                      border:
+                          Border.all(color: on ? c : Colors.transparent),
+                    ),
+                    child: Column(children: [
+                      Icon(ic, size: 16, color: on ? c : mut(.35)),
+                      const SizedBox(height: 4),
+                      Text(label,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: on ? c : mut(.4))),
+                    ]),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ]),
+    );
+  }
+}
+
+// ============================================================
+// TOOLS TAB
+// ============================================================
+class ToolsTab extends StatelessWidget {
+  const ToolsTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        pageTitleRow('Tools', 'Utilitas & informasi perangkat'),
+        const SizedBox(height: 24),
+        _sectionTitle('INFORMASI CHIPSET', kCyan),
+        const SizedBox(height: 12),
+        ValueListenableBuilder<Map<String, String>>(
+          valueListenable: deviceNotifier,
+          builder: (_, d, __) => ValueListenableBuilder<Map<String, String>>(
+            valueListenable: sysNotifier,
+            builder: (_, sys, __) => Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                  color: kPanel,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: kBorder)),
+              child: Column(children: [
+                _infoRow('Perangkat', d['name'] ?? '-'),
+                _infoRow('Versi OS', d['android'] ?? '-'),
+                _infoRow('Chipset', d['chipset'] ?? '-'),
+                _infoRow('CPU Sekarang', sys['freq'] ?? '-'),
+                _infoRow('CPU Maksimum', sys['max_freq'] ?? '-'),
+                _infoRow('Governor', sys['gov'] ?? '-'),
+              ]),
+            ),
+          ),
+        ),
+        const SizedBox(height: 22),
+        _sectionTitle('REBOOT PERANGKAT', kRed),
+        const SizedBox(height: 12),
+        _rebootCard(context),
+        const SizedBox(height: 22),
+        _sectionTitle('LAINNYA', kGreen),
+        const SizedBox(height: 12),
+        _toolTile(Icons.developer_mode_rounded, 'Buka Pengaturan Developer',
+            'Akses opsi pengembang sistem', kGreen, () {
+          runAction(() => RootService.run('am start -a android.settings.APPLICATION_DEVELOPMENT_SETTINGS && echo OK'),
+              ok: '✅ Membuka pengaturan developer');
+        }),
+        const SizedBox(height: 10),
+        _toolTile(Icons.bedtime_rounded, 'Tutup Semua Aplikasi Latar',
+            'Hentikan app berjalan di background', kPurple, () {
+          runAction(RootService.clearRam, ok: '✅ Aplikasi latar dihentikan');
+        }),
+        const SizedBox(height: 22),
+        _sectionTitle('JARINGAN & SISTEM', kTeal),
+        const SizedBox(height: 12),
+        _toolTile(Icons.dns_rounded, 'Flush DNS Cache',
+            'Bersihkan cache DNS untuk koneksi lebih segar', kTeal, () {
+          runAction(RootService.flushDns, ok: '✅ DNS cache dibersihkan');
+        }),
+        const SizedBox(height: 10),
+        _toolTile(Icons.airplanemode_active_rounded, 'Refresh Sinyal',
+            'Toggle airplane mode cepat untuk cari sinyal', kCyan, () {
+          runAction(RootService.refreshSignal,
+              ok: '✅ Sinyal di-refresh', noRoot: 'Butuh root aktif.');
+        }),
+        const SizedBox(height: 10),
+        _toolTile(Icons.delete_sweep_rounded, 'Bersihkan Cache Aplikasi',
+            'Hapus cache semua aplikasi untuk lega penyimpanan', kOrange, () {
+          runAction(RootService.trimCaches, ok: '✅ Cache aplikasi dibersihkan');
+        }),
+        const SizedBox(height: 10),
+        _toolTile(Icons.battery_saver_rounded, 'Kalibrasi Baterai',
+            'Reset statistik baterai (batterystats)', kGreen, () {
+          runAction(RootService.resetBatteryStats,
+              ok: '✅ Statistik baterai direset');
+        }),
+        const SizedBox(height: 22),
+        _sectionTitle('PINTASAN PENGATURAN', kPurple),
+        const SizedBox(height: 12),
+        _toolTile(Icons.display_settings_rounded, 'Pengaturan Layar',
+            'Buka pengaturan tampilan & refresh rate', kPurple, () {
+          runAction(
+              () => RootService.run(
+                  'am start -a android.settings.DISPLAY_SETTINGS && echo OK'),
+              ok: '✅ Membuka pengaturan layar');
+        }),
+        const SizedBox(height: 10),
+        _toolTile(Icons.apps_rounded, 'Info Aplikasi',
+            'Buka daftar & info semua aplikasi', kCyan, () {
+          runAction(
+              () => RootService.run(
+                  'am start -a android.settings.APPLICATION_SETTINGS && echo OK'),
+              ok: '✅ Membuka info aplikasi');
+        }),
+        const SizedBox(height: 10),
+        _toolTile(Icons.battery_charging_full_rounded, 'Pengaturan Baterai',
+            'Buka pengaturan & penghemat baterai', kGreen, () {
+          runAction(
+              () => RootService.run(
+                  'am start -a android.settings.BATTERY_SAVER_SETTINGS && echo OK'),
+              ok: '✅ Membuka pengaturan baterai');
+        }),
+      ],
+    );
+  }
+
+  Widget _infoRow(String k, String v) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(children: [
+        SizedBox(
+            width: 90,
+            child: Text(k, style: TextStyle(color: mut(.45), fontSize: 12.5))),
+        Expanded(
+          child: Text(v,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                  color: kWhite,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'monospace')),
+        ),
+      ]),
+    );
+  }
+
+  Widget _toolTile(IconData ic, String title, String sub, Color c,
+      VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+            color: kPanel,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: kBorder)),
+        child: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(
+                color: glow(c, .1), borderRadius: BorderRadius.circular(13)),
+            child: Icon(ic, color: c, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: TextStyle(
+                          color: kWhite,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 3),
+                  Text(sub, style: TextStyle(color: mut(.45), fontSize: 11.5)),
+                ]),
+          ),
+          Icon(Icons.chevron_right_rounded, color: mut(.3), size: 20),
+        ]),
+      ),
+    );
+  }
+
+  Widget _rebootCard(BuildContext context) {
+    return _controlCard(
+      Icons.restart_alt_rounded,
+      'Reboot Device',
+      'System / Recovery / Fastboot',
+      'Reboot',
+      kRed,
+      () => _showRebootSheet(context),
+    );
+  }
+
+  void _showRebootSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: kPanel,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                  color: mut(.2), borderRadius: BorderRadius.circular(2)),
+            ),
+            Text('Pilih Mode Reboot',
+                style: TextStyle(
+                    color: kWhite, fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            _rebootOpt(ctx, Icons.restart_alt_rounded, kCyan, 'Reboot System',
+                'Restart normal', RootService.rebootSystem),
+            _rebootOpt(ctx, Icons.build_circle_outlined, kYellow,
+                'Reboot Recovery', 'Masuk mode recovery',
+                RootService.rebootRecovery),
+            _rebootOpt(ctx, Icons.usb_rounded, kPurple, 'Reboot Fastboot',
+                'Masuk mode bootloader', RootService.rebootFastboot),
+            const SizedBox(height: 8),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _rebootOpt(BuildContext ctx, IconData ic, Color c, String label,
+      String desc, Future<String> Function() act) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+            color: glow(c, .1), borderRadius: BorderRadius.circular(12)),
+        child: Icon(ic, color: c, size: 22),
+      ),
+      title: Text(label,
+          style: TextStyle(
+              color: kWhite, fontWeight: FontWeight.w600, fontSize: 14)),
+      subtitle:
+          Text(desc, style: TextStyle(color: mut(.5), fontSize: 12)),
+      onTap: () {
+        Navigator.pop(ctx);
+        showDialog(
+          context: ctx,
+          builder: (d) => AlertDialog(
+            backgroundColor: kPanel,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text('Konfirmasi',
+                style: TextStyle(color: kWhite)),
+            content: Text('Jalankan "$label"? Perangkat akan restart sekarang.',
+                style: TextStyle(color: mut(.7))),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(d),
+                  child: const Text('Batal')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: kRed, foregroundColor: Colors.white),
+                onPressed: () {
+                  Navigator.pop(d);
+                  runAction(act,
+                      ok: '✅ $label...',
+                      noRoot: 'Gagal reboot. Pastikan root aktif.');
+                },
+                child: const Text('Ya, Reboot'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ============================================================
+// DOUBLE TAP TO WAKE TILE
+// ============================================================
+// Beberapa HP (terutama Infinix/Transsion) suka menonaktifkan sendiri
+// opsi "ketuk 2 kali untuk membangunkan" setelah reboot/update. Widget
+// ini menampilkan status terkini dan tombol "Aktifkan Ulang" yang bisa
+// ditekan sewaktu-waktu kalau fiturnya ke-disable otomatis lagi.
+class _DoubleTapWakeTile extends StatefulWidget {
+  const _DoubleTapWakeTile();
+  @override
+  State<_DoubleTapWakeTile> createState() => _DoubleTapWakeTileState();
+}
+
+class _DoubleTapWakeTileState extends State<_DoubleTapWakeTile> {
+  bool? _active;
+  bool _loading = true;
+  bool _nodeExists = true; // optimis sampai terbukti tidak ada
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final exists = await RootService.doubleTapWakeNodeExists();
+    final s = await RootService.doubleTapWakeStatus();
+    if (mounted) {
+      setState(() {
+        _nodeExists = exists;
+        _active = s == '1';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _toggle() async {
+    setState(() => _loading = true);
+    final on = _active != true;
+    final res = on
+        ? await RootService.enableDoubleTapWake()
+        : await RootService.disableDoubleTapWake();
+    if (!mounted) return;
+    if (RootService.bad(res) || res.startsWith('FAIL:')) {
+      _showSnack(context, on
+          ? '⚠️ Gagal mengaktifkan. Pastikan root aktif.'
+          : '⚠️ Gagal menonaktifkan. Pastikan root aktif.');
+    } else {
+      _showSnack(context, on
+          ? '✅ Ketuk 2x untuk bangun diaktifkan'
+          : '✅ Ketuk 2x untuk bangun dinonaktifkan');
+    }
+    await _refresh();
+  }
+
+  void _showSnack(BuildContext context, String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: kPanel2),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final on = _active == true;
+    String subtitle;
+    Color subtitleColor;
+    if (_loading) {
+      subtitle = 'Memeriksa status...';
+      subtitleColor = mut(.45);
+    } else if (!_nodeExists) {
+      subtitle = 'Tidak didukung (akses root nonaktif?)';
+      subtitleColor = kYellow;
+    } else if (on) {
+      subtitle = 'Aktif — dipulihkan otomatis tiap buka app';
+      subtitleColor = kGreen;
+    } else {
+      subtitle = 'Nonaktif — tekan untuk mengaktifkan';
+      subtitleColor = mut(.5);
+    }
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: busyNotifier,
+      builder: (_, busy, __) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+            color: kPanel,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: kBorder)),
+        child: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(
+                color: glow(kTeal, .1), borderRadius: BorderRadius.circular(13)),
+            child: Icon(Icons.touch_app_rounded, color: kTeal, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Ketuk 2x untuk Bangun',
+                  style: TextStyle(
+                      color: kWhite, fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 3),
+              Text(subtitle, style: TextStyle(color: subtitleColor, fontSize: 11.5)),
+            ]),
+          ),
+          const SizedBox(width: 10),
+          if (_loading)
+            const SizedBox(
+                width: 20, height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: kTeal))
+          else
+            ElevatedButton(
+              onPressed: busy ? null : _toggle,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: glow(kTeal, .15),
+                foregroundColor: kTeal,
+                disabledBackgroundColor: mut(.05),
+                disabledForegroundColor: mut(.3),
+                side: BorderSide(color: busy ? Colors.transparent : kTeal),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+                elevation: 0,
+              ),
+              child: Text(on ? 'Aktif ✓' : 'Aktifkan',
+                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// ABOUT TAB
+// ============================================================
+class AboutTab extends StatelessWidget {
+  const AboutTab({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      children: [
+        Align(alignment: Alignment.centerRight, child: themeToggleButton()),
+        const SizedBox(height: 20),
+        Center(
+          child: Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(colors: [kCyan, Color(0xFF0090A8)]),
+              boxShadow: [
+                BoxShadow(color: glow(kCyan, .35), blurRadius: 24, spreadRadius: 1)
+              ],
+            ),
+            child: const Icon(Icons.bolt_rounded, color: Colors.black, size: 40),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: Text('Welcome Sahrul',
+              style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: kWhite)),
+        ),
+        const SizedBox(height: 4),
+        Center(
+          child: Text('Device Control Center • v2.0.0',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: glow(kCyan, .7),
+                  letterSpacing: 1,
+                  fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(height: 28),
+        _aboutCard(
+          Icons.shield_rounded,
+          kGreen,
+          'Anti Force-Close',
+          'Semua perintah root dibungkus pengaman berlapis. App tidak akan menutup mendadak meski perintah gagal.',
+        ),
+        const SizedBox(height: 12),
+        _aboutCard(
+          Icons.devices_rounded,
+          kCyan,
+          'Universal',
+          'Mendeteksi nama perangkat, jumlah core CPU, dan jalur sensor otomatis — mendukung beragam HP Android.',
+        ),
+        const SizedBox(height: 12),
+        _aboutCard(
+          Icons.warning_amber_rounded,
+          kYellow,
+          'Butuh Root',
+          'Sebagian besar fitur memerlukan akses root aktif. Berikan izin lewat aplikasi manajer root kamu.',
+        ),
+        const SizedBox(height: 28),
+        Center(
+          child: Text('Dibuat oleh Sahrul',
+              style: TextStyle(color: mut(.4), fontSize: 12)),
+        ),
+      ],
+    );
+  }
+
+  Widget _aboutCard(IconData ic, Color c, String title, String body) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: kPanel,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: kBorder)),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+              color: glow(c, .1), borderRadius: BorderRadius.circular(12)),
+          child: Icon(ic, color: c, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: TextStyle(
+                    color: kWhite, fontSize: 14, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(body,
+                style: TextStyle(color: mut(.5), fontSize: 12, height: 1.4)),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+// ============================================================
+// SHARED WIDGETS (top-level)
+// ============================================================
+
+// Tombol toggle Night/Light untuk pojok kanan atas tiap tab.
+Widget themeToggleButton() => ValueListenableBuilder<bool>(
+      valueListenable: isNightNotifier,
+      builder: (_, night, __) => GestureDetector(
+        onTap: () => isNightNotifier.value = !isNightNotifier.value,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: glow(night ? kPurple : kYellow, .12),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: glow(night ? kPurple : kYellow, .4)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(night ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                size: 16, color: night ? kPurple : kYellow),
+            const SizedBox(width: 6),
+            Text(night ? 'Night' : 'Light',
+                style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: night ? kPurple : kYellow)),
+          ]),
+        ),
+      ),
+    );
+
+// Baris judul halaman + tombol Night/Light di kanan.
+Widget pageTitleRow(String title, String subtitle) => Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.w800, color: kWhite)),
+            Text(subtitle, style: TextStyle(fontSize: 12.5, color: mut(.45))),
+          ]),
+        ),
+        const SizedBox(width: 12),
+        themeToggleButton(),
+      ],
+    );
+
+Widget _sectionTitle(String t, Color accent) => Row(children: [
+      Container(
+          width: 3,
+          height: 14,
+          decoration: BoxDecoration(
+              color: accent, borderRadius: BorderRadius.circular(2))),
+      const SizedBox(width: 8),
+      Text(t,
+          style: TextStyle(
+              color: kWhite,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: .3)),
+    ]);
+
+Widget _banner(String text, {Color color = kCyan}) => Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: glow(color, .08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: glow(color, .4)),
+      ),
+      child: Text(text,
+          style: TextStyle(color: color, fontSize: 12.5, height: 1.3)),
+    );
+
+Widget _ring(IconData ic, String label, String value, Color c,
+    {double? pct}) {
+  return Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: kPanel,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: glow(c, .18)),
+      boxShadow: [
+        BoxShadow(color: glow(c, .06), blurRadius: 16, spreadRadius: -4)
+      ],
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SizedBox(
+        width: 36,
+        height: 36,
+        child: Stack(alignment: Alignment.center, children: [
+          if (pct != null)
+            SizedBox(
+              width: 36,
+              height: 36,
+              child: CircularProgressIndicator(
+                value: pct.clamp(0.0, 1.0),
+                strokeWidth: 2.5,
+                backgroundColor: mut(.06),
+                valueColor: AlwaysStoppedAnimation(c),
+              ),
+            )
+          else
+            Container(
+                width: 36,
+                height: 36,
+                decoration:
+                    BoxDecoration(shape: BoxShape.circle, color: glow(c, .08))),
+          Icon(ic, color: c, size: 16),
+        ]),
+      ),
+      const SizedBox(height: 12),
+      Text(value,
+          style: TextStyle(
+              color: c,
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              fontFamily: 'monospace',
+              letterSpacing: -.5)),
+      const SizedBox(height: 3),
+      Text(label,
+          style: TextStyle(
+              color: mut(.38),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              letterSpacing: .8)),
+    ]),
+  );
+}
+
+Widget _controlCard(IconData ic, String title, String sub, String btnLabel,
+    Color c, VoidCallback onTap) {
+  return ValueListenableBuilder<bool>(
+    valueListenable: busyNotifier,
+    builder: (_, busy, __) => Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: kPanel,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: kBorder)),
+      child: Row(children: [
+        Container(
+          padding: const EdgeInsets.all(11),
+          decoration: BoxDecoration(
+              color: glow(c, .1), borderRadius: BorderRadius.circular(13)),
+          child: Icon(ic, color: c, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: TextStyle(
+                    color: kWhite,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 3),
+            Text(sub, style: TextStyle(color: mut(.45), fontSize: 11.5)),
+          ]),
+        ),
+        const SizedBox(width: 10),
+        ElevatedButton(
+          onPressed: busy ? null : onTap,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: glow(c, .15),
+            foregroundColor: c,
+            disabledBackgroundColor: mut(.05),
+            disabledForegroundColor: mut(.3),
+            side: BorderSide(color: busy ? Colors.transparent : c),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(11)),
+            elevation: 0,
+          ),
+          child: Text(btnLabel,
+              style: const TextStyle(
+                  fontSize: 11.5, fontWeight: FontWeight.bold)),
+        ),
+      ]),
+    ),
+  );
+}
