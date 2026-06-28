@@ -201,8 +201,7 @@ class _AppIcon extends StatelessWidget {
     width: size, height: size,
     decoration: BoxDecoration(
       shape: BoxShape.circle,
-      gradient: const RadialGradient(
-        center: Alignment(-0.3, -0.3),
+      gradient: const RadialGradient(center: Alignment(-0.3, -0.3),
         colors: [Color(0xFF1C1C44), Color(0xFF080816)]),
       boxShadow: [
         BoxShadow(color: kCyan.withOpacity(.35), blurRadius: 26, spreadRadius: 1),
@@ -224,7 +223,6 @@ class _IconPainter extends CustomPainter {
   void paint(Canvas canvas, Size s) {
     final cx = s.width / 2, cy = s.height / 2;
     final rOuter = s.width * 0.34, rInner = s.width * 0.16;
-    // Kaki sirkuit
     final legPaint = Paint()..color = kCyan.withOpacity(.5)
       ..strokeWidth = s.width * 0.022..strokeCap = StrokeCap.round;
     final padPaint = Paint()..color = kCyan.withOpacity(.7);
@@ -234,7 +232,6 @@ class _IconPainter extends CustomPainter {
       canvas.drawLine(inner, outer, legPaint);
       canvas.drawCircle(outer, s.width * 0.026, padPaint);
     }
-    // Hexagon luar
     final hexPath = Path();
     for (int i = 0; i < 6; i++) {
       final p = _hex(cx, cy, rOuter, i);
@@ -248,7 +245,6 @@ class _IconPainter extends CustomPainter {
     canvas.drawPath(hexPath, Paint()..style = PaintingStyle.stroke
       ..strokeWidth = s.width * 0.028..strokeJoin = StrokeJoin.round
       ..color = kCyan..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2));
-    // Inti chip
     final corePath = Path();
     for (int i = 0; i < 6; i++) {
       final p = _hex(cx, cy, rInner, i);
@@ -572,90 +568,76 @@ class CommandTab extends StatelessWidget {
           const SizedBox(height: 16),
 
           _CmdGroup(icon: Icons.developer_board_rounded, label: 'CPU Governor', accent: kCyan,
-            subtitle: 'sugov_ext · conservative · powersave · performance · schedutil',
+            subtitle: 'Mode kerja CPU',
             children: [
-              _CmdLeaf('performance',  Icons.flash_on_rounded,          kRed,    'Semua core max — gaming/benchmark',        cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo performance > \$f; done'),
-              _CmdLeaf('schedutil',    Icons.schedule_rounded,          kCyan,   'Adaptif load-based — rekomendasi harian',  cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo schedutil > \$f; done'),
-              _CmdLeaf('conservative', Icons.trending_down_rounded,     kBlue,   'Naik pelan turun cepat — hemat daya',      cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo conservative > \$f; done'),
-              _CmdLeaf('powersave',    Icons.battery_saver_rounded,     kGreen,  'Kunci di frekuensi minimum',               cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo powersave > \$f; done'),
-              _CmdLeaf('sugov_ext',    Icons.auto_awesome_rounded,      kPurple, 'Governor extended MediaTek',               cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo sugov_ext > \$f; done'),
+              _CmdLeaf('performance',  Icons.flash_on_rounded,      kRed,    'Semua core max — gaming',      cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo performance > \$f; done'),
+              _CmdLeaf('schedutil',    Icons.schedule_rounded,      kCyan,   'Adaptif — rekomendasi harian', cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo schedutil > \$f; done'),
+              _CmdLeaf('powersave',    Icons.battery_saver_rounded, kGreen,  'Hemat daya maksimal',          cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo powersave > \$f; done'),
             ]),
 
           _CmdGroup(icon: Icons.speed_rounded, label: 'CPU Frekuensi Max', accent: kOrange,
-            subtitle: 'MT6895 · 450 MHz – 2000 MHz',
+            subtitle: '450 – 2000 MHz',
             children: [
-              _CmdLeaf('2000 MHz', Icons.rocket_launch_rounded,         kRed,    'Full speed — panas tinggi',   cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do echo 2000000 > \$f; done'),
-              _CmdLeaf('1800 MHz', Icons.bolt_rounded,                  kOrange, 'High performance',            cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do echo 1800000 > \$f; done'),
-              _CmdLeaf('1500 MHz', Icons.electric_bolt_rounded,         kYellow, 'Balanced — rekomendasi',      cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do echo 1500000 > \$f; done'),
-              _CmdLeaf('1200 MHz', Icons.eco_rounded,                   kGreen,  'Hemat daya ringan',           cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do echo 1200000 > \$f; done'),
-              _CmdLeaf('900 MHz',  Icons.battery_charging_full_rounded, kTeal,   'Ultra hemat — kerja ringan',  cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do echo 900000 > \$f; done'),
-              _CmdLeaf('450 MHz',  Icons.battery_saver_rounded,         kBlue,   'Minimum — idle only',         cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do echo 450000 > \$f; done'),
-            ]),
-
-          _CmdGroup(icon: Icons.tune_rounded, label: 'CPU Frekuensi Min', accent: kBlue,
-            subtitle: 'Batas bawah frekuensi CPU',
-            children: [
-              _CmdLeaf('450 MHz',  Icons.battery_saver_rounded, kGreen,  'Min standar — hemat idle',     cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_min_freq; do echo 450000 > \$f; done'),
-              _CmdLeaf('700 MHz',  Icons.speed_rounded,         kBlue,   'Min sedang — respon cepat',    cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_min_freq; do echo 700000 > \$f; done'),
-              _CmdLeaf('1000 MHz', Icons.bolt_rounded,          kOrange, 'Min tinggi — selalu responsif',cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_min_freq; do echo 1000000 > \$f; done'),
+              _CmdLeaf('2000 MHz', Icons.rocket_launch_rounded, kRed,    'Full speed',     cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do echo 2000000 > \$f; done'),
+              _CmdLeaf('1500 MHz', Icons.electric_bolt_rounded, kYellow, 'Balanced',       cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do echo 1500000 > \$f; done'),
+              _CmdLeaf('900 MHz',  Icons.eco_rounded,           kGreen,  'Hemat daya',     cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do echo 900000 > \$f; done'),
             ]),
 
           _CmdGroup(icon: Icons.memory_rounded, label: 'RAM & Cache', accent: kPurple,
-            subtitle: 'Drop cache · Swappiness · Virtual memory',
+            subtitle: 'Bersihkan memori',
             children: [
-              _CmdLeaf('Clear PageCache',       Icons.cleaning_services_rounded, kGreen,  'Bebaskan cache halaman',        cmd: 'sync; echo 1 > /proc/sys/vm/drop_caches'),
-              _CmdLeaf('Clear Dentries+Inodes', Icons.delete_sweep_rounded,      kTeal,   'Bersihkan dentries & inodes',   cmd: 'sync; echo 2 > /proc/sys/vm/drop_caches'),
-              _CmdLeaf('Clear All Cache',       Icons.auto_delete_rounded,       kOrange, 'Bersihkan semua cache',         cmd: 'sync; echo 3 > /proc/sys/vm/drop_caches'),
-              _CmdLeaf('Swappiness 10',         Icons.swap_horiz_rounded,        kBlue,   'Prioritaskan RAM — minimal swap',cmd: 'echo 10 > /proc/sys/vm/swappiness'),
-              _CmdLeaf('Swappiness 60',         Icons.swap_vert_rounded,         kPurple, 'Default Linux — seimbang',      cmd: 'echo 60 > /proc/sys/vm/swappiness'),
-              _CmdLeaf('Swappiness 100',        Icons.swap_calls_rounded,        kRed,    'Agresif swap — RAM selalu bebas',cmd: 'echo 100 > /proc/sys/vm/swappiness'),
-              _CmdLeaf('vm.dirty_ratio 10',     Icons.save_rounded,              kCyan,   'Buffer tulis lebih kecil',      cmd: 'echo 10 > /proc/sys/vm/dirty_ratio'),
-              _CmdLeaf('vm.dirty_ratio 40',     Icons.save_alt_rounded,          kBlue,   'Buffer tulis default',          cmd: 'echo 40 > /proc/sys/vm/dirty_ratio'),
+              _CmdLeaf('Clear Cache',     Icons.cleaning_services_rounded, kGreen,  'Bebaskan RAM cache',         cmd: 'sync; echo 3 > /proc/sys/vm/drop_caches'),
+              _CmdLeaf('Swappiness 10',   Icons.swap_horiz_rounded,        kBlue,   'Prioritaskan RAM',           cmd: 'echo 10 > /proc/sys/vm/swappiness'),
+              _CmdLeaf('Swappiness 60',   Icons.swap_vert_rounded,         kPurple, 'Seimbang (default)',         cmd: 'echo 60 > /proc/sys/vm/swappiness'),
             ]),
 
           _CmdGroup(icon: Icons.thermostat_rounded, label: 'Thermal', accent: kRed,
-            subtitle: 'MT6895 · 47 zone · 13 cooling device',
+            subtitle: 'Kontrol suhu & throttle',
             children: [
-              _CmdLeaf('Baca Suhu Semua Zone',    Icons.thermostat_rounded,   kCyan,  'Tampilkan temp semua zone aktif',          cmd: 'for z in /sys/class/thermal/thermal_zone*/temp; do t=\$(cat \$z 2>/dev/null); [ -n "\$t" ] && echo "\$z: \$t"; done', readOnly: true),
-              _CmdLeaf('Baca Cooling Device',     Icons.ac_unit_rounded,      kBlue,  'Lihat semua cooling device & state',       cmd: 'for c in /sys/class/thermal/cooling_device*/cur_state; do echo "\$c: \$(cat \$c 2>/dev/null)"; done', readOnly: true),
-              _CmdLeaf('Disable Throttle Zone 0', Icons.warning_rounded,      kRed,   'Matikan throttle zone 0 — pantau suhu!',   cmd: 'echo disabled > /sys/class/thermal/thermal_zone0/mode'),
-              _CmdLeaf('Enable Throttle Zone 0',  Icons.check_circle_rounded, kGreen, 'Aktifkan kembali throttle zone 0',         cmd: 'echo enabled > /sys/class/thermal/thermal_zone0/mode'),
-              _CmdLeaf('Disable Throttle Zone 1', Icons.warning_amber_rounded,kOrange,'Matikan throttle zone 1',                  cmd: 'echo disabled > /sys/class/thermal/thermal_zone1/mode'),
-              _CmdLeaf('Enable Throttle Zone 1',  Icons.check_rounded,        kTeal,  'Aktifkan kembali throttle zone 1',         cmd: 'echo enabled > /sys/class/thermal/thermal_zone1/mode'),
+              _CmdLeaf('Baca Suhu', Icons.thermostat_rounded, kCyan, 'Lihat semua zone suhu', cmd: 'for z in /sys/class/thermal/thermal_zone*/temp; do t=\$(cat \$z 2>/dev/null); [ -n "\$t" ] && echo "\$z: \$t"; done', readOnly: true),
+              _CmdLeaf('Disable Throttle', Icons.warning_rounded,      kRed,   'Matikan throttle — pantau suhu!', cmd: 'echo disabled > /sys/class/thermal/thermal_zone0/mode'),
+              _CmdLeaf('Enable Throttle',  Icons.check_circle_rounded, kGreen, 'Aktifkan throttle kembali',       cmd: 'echo enabled > /sys/class/thermal/thermal_zone0/mode'),
             ]),
 
           _CmdGroup(icon: Icons.storage_rounded, label: 'I/O Scheduler', accent: kTeal,
-            subtitle: 'Optimasi baca/tulis storage',
+            subtitle: 'Optimasi storage',
             children: [
-              _CmdLeaf('noop',       Icons.linear_scale_rounded, kGreen,  'Minimal overhead — SSD/eMMC',        cmd: 'for d in /sys/block/*/queue/scheduler; do echo noop > \$d 2>/dev/null; done'),
-              _CmdLeaf('deadline',   Icons.timer_rounded,        kOrange, 'Deadline-based — responsif I/O',     cmd: 'for d in /sys/block/*/queue/scheduler; do echo deadline > \$d 2>/dev/null; done'),
-              _CmdLeaf('cfq',        Icons.queue_rounded,        kBlue,   'Completely Fair Queuing — default',  cmd: 'for d in /sys/block/*/queue/scheduler; do echo cfq > \$d 2>/dev/null; done'),
-              _CmdLeaf('mq-deadline',Icons.alarm_rounded,        kCyan,   'Multi-queue deadline — modern',      cmd: 'for d in /sys/block/*/queue/scheduler; do echo mq-deadline > \$d 2>/dev/null; done'),
-              _CmdLeaf('Baca Scheduler', Icons.search_rounded,   kPurple, 'Tampilkan scheduler aktif',          cmd: 'for d in /sys/block/*/queue/scheduler; do echo "\$d: \$(cat \$d 2>/dev/null)"; done', readOnly: true),
+              _CmdLeaf('noop',     Icons.linear_scale_rounded, kGreen,  'Minimal overhead',     cmd: 'for d in /sys/block/*/queue/scheduler; do echo noop > \$d 2>/dev/null; done'),
+              _CmdLeaf('deadline', Icons.timer_rounded,        kOrange, 'Responsif I/O',        cmd: 'for d in /sys/block/*/queue/scheduler; do echo deadline > \$d 2>/dev/null; done'),
             ]),
 
-          _CmdGroup(icon: Icons.wifi_rounded, label: 'Network', accent: kBlue,
-            subtitle: 'DNS · TCP · Buffer',
+          _CmdGroup(icon: Icons.dns_rounded, label: 'DNS Pribadi', accent: kBlue,
+            subtitle: 'Private DNS (DoT)',
             children: [
-              _CmdLeaf('DNS Google',     Icons.dns_rounded,        kBlue,   'Set DNS 8.8.8.8 / 8.8.4.4',           cmd: 'setprop net.dns1 8.8.8.8; setprop net.dns2 8.8.4.4'),
-              _CmdLeaf('DNS Cloudflare', Icons.cloud_rounded,      kOrange, 'Set DNS 1.1.1.1 / 1.0.0.1',           cmd: 'setprop net.dns1 1.1.1.1; setprop net.dns2 1.0.0.1'),
-              _CmdLeaf('DNS OpenDNS',    Icons.lock_rounded,       kGreen,  'Set DNS 208.67.222.222',               cmd: 'setprop net.dns1 208.67.222.222; setprop net.dns2 208.67.220.220'),
-              _CmdLeaf('TCP BBR',        Icons.compress_rounded,   kGreen,  'Aktifkan congestion control BBR',      cmd: 'echo bbr > /proc/sys/net/ipv4/tcp_congestion_control'),
-              _CmdLeaf('TCP Cubic',      Icons.show_chart_rounded, kPurple, 'Default Linux cubic',                  cmd: 'echo cubic > /proc/sys/net/ipv4/tcp_congestion_control'),
-              _CmdLeaf('TCP Westwood+',  Icons.trending_up_rounded,kTeal,   'Optimal untuk jaringan wireless',      cmd: 'echo westwood > /proc/sys/net/ipv4/tcp_congestion_control'),
-              _CmdLeaf('Baca DNS Aktif', Icons.search_rounded,     kCyan,   'Tampilkan DNS yang sedang aktif',      cmd: 'getprop net.dns1; getprop net.dns2', readOnly: true),
-              _CmdLeaf('Baca TCP CC',    Icons.info_rounded,       kBlue,   'Tampilkan congestion control aktif',   cmd: 'cat /proc/sys/net/ipv4/tcp_congestion_control', readOnly: true),
+              _CmdLeaf('AdGuard',    Icons.shield_rounded,  kGreen,  'Blokir iklan & tracker',    cmd: 'settings put global private_dns_mode hostname; settings put global private_dns_specifier dns.adguard-dns.com'),
+              _CmdLeaf('Cloudflare', Icons.cloud_rounded,   kOrange, 'Cepat & privat (1.1.1.1)',  cmd: 'settings put global private_dns_mode hostname; settings put global private_dns_specifier one.one.one.one'),
+              _CmdLeaf('Quad9',      Icons.security_rounded, kBlue,   'Blokir situs berbahaya',    cmd: 'settings put global private_dns_mode hostname; settings put global private_dns_specifier dns.quad9.net'),
+              _CmdLeaf('Google',     Icons.public_rounded,   kCyan,   'DNS Google (8.8.8.8)',      cmd: 'settings put global private_dns_mode hostname; settings put global private_dns_specifier dns.google'),
+              _CmdLeaf('Matikan DNS Pribadi', Icons.power_settings_new_rounded, kRed, 'Kembali ke otomatis', cmd: 'settings put global private_dns_mode off'),
+              _CmdLeaf('Cek DNS Aktif', Icons.search_rounded, kPurple, 'Lihat private DNS sekarang', cmd: 'settings get global private_dns_specifier', readOnly: true),
             ]),
 
-          _CmdGroup(icon: Icons.settings_rounded, label: 'System Misc', accent: kYellow,
-            subtitle: 'Build info · Reboot · Logcat',
+          _CmdGroup(icon: Icons.network_check_rounded, label: 'TCP Network', accent: kGreen,
+            subtitle: 'Congestion control',
             children: [
-              _CmdLeaf('Info Build',         Icons.info_rounded,           kCyan,   'Model, platform, Android version',     cmd: 'getprop ro.product.model; getprop ro.board.platform; getprop ro.build.version.release', readOnly: true),
-              _CmdLeaf('Cek Root',           Icons.verified_rounded,       kGreen,  'Verifikasi status root saat ini',      cmd: 'id', readOnly: true),
-              _CmdLeaf('Clear Logcat',       Icons.delete_rounded,         kOrange, 'Bersihkan buffer logcat',              cmd: 'logcat -c'),
-              _CmdLeaf('Reboot System',      Icons.restart_alt_rounded,    kRed,    'Reboot perangkat sekarang',            cmd: 'reboot'),
-              _CmdLeaf('Reboot Recovery',    Icons.build_circle_rounded,   kPurple, 'Reboot ke recovery mode',             cmd: 'reboot recovery'),
-              _CmdLeaf('Reboot Bootloader',  Icons.developer_mode_rounded, kBlue,   'Reboot ke fastboot/bootloader',        cmd: 'reboot bootloader'),
+              _CmdLeaf('TCP BBR',   Icons.compress_rounded,   kGreen,  'Algoritma Google BBR', cmd: 'echo bbr > /proc/sys/net/ipv4/tcp_congestion_control'),
+              _CmdLeaf('TCP Cubic', Icons.show_chart_rounded, kPurple, 'Default Linux',        cmd: 'echo cubic > /proc/sys/net/ipv4/tcp_congestion_control'),
+            ]),
+
+          _CmdGroup(icon: Icons.touch_app_rounded, label: 'Layar & Gesture', accent: kPink,
+            subtitle: 'Double tap to wake',
+            children: [
+              _CmdLeaf('Double Tap to Wake: ON',  Icons.touch_app_rounded,   kGreen, 'Ketuk 2x untuk nyalakan layar', cmd: 'echo 1 > /sys/devices/platform/goodix_ts.0/gesture/enable'),
+              _CmdLeaf('Double Tap to Wake: OFF', Icons.do_not_touch_rounded, kRed,  'Matikan gesture wake',          cmd: 'echo 0 > /sys/devices/platform/goodix_ts.0/gesture/enable'),
+              _CmdLeaf('Cek Status DT2W', Icons.search_rounded, kCyan, 'Lihat status gesture sekarang', cmd: 'cat /sys/devices/platform/goodix_ts.0/gesture/enable', readOnly: true),
+            ]),
+
+          _CmdGroup(icon: Icons.settings_rounded, label: 'System', accent: kYellow,
+            subtitle: 'Info & reboot',
+            children: [
+              _CmdLeaf('Info Build', Icons.info_rounded,        kCyan,  'Model & versi Android',  cmd: 'getprop ro.product.model; getprop ro.board.platform; getprop ro.build.version.release', readOnly: true),
+              _CmdLeaf('Clear Logcat', Icons.delete_rounded,    kOrange,'Bersihkan buffer log',   cmd: 'logcat -c'),
+              _CmdLeaf('Reboot', Icons.restart_alt_rounded,     kRed,   'Reboot perangkat',       cmd: 'reboot'),
             ]),
 
           const SizedBox(height: 20),
@@ -673,7 +655,7 @@ class _CmdGroup extends StatelessWidget {
   final List<_CmdLeaf> children;
   const _CmdGroup({required this.icon, required this.label, required this.subtitle, required this.accent, required this.children});
 
-  void _openDialog(BuildContext context) {
+  void _open(BuildContext context) {
     HapticFeedback.selectionClick();
     showGeneralDialog(
       context: context,
@@ -683,14 +665,10 @@ class _CmdGroup extends StatelessWidget {
       transitionDuration: const Duration(milliseconds: 240),
       pageBuilder: (_, __, ___) => const SizedBox.shrink(),
       transitionBuilder: (ctx, anim, _, __) {
-        final curve = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-        return Transform.scale(
-          scale: 0.92 + 0.08 * curve.value,
-          child: Opacity(
-            opacity: curve.value,
-            child: _CmdDialog(icon: icon, label: label, subtitle: subtitle, accent: accent, children: children),
-          ),
-        );
+        final c = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return Transform.scale(scale: 0.92 + 0.08 * c.value,
+          child: Opacity(opacity: c.value,
+            child: _CmdDialog(icon: icon, label: label, subtitle: subtitle, accent: accent, children: children)));
       },
     );
   }
@@ -702,7 +680,7 @@ class _CmdGroup extends StatelessWidget {
       child: ValueListenableBuilder<bool>(
         valueListenable: isNightNotifier,
         builder: (_, __, ___) => GestureDetector(
-          onTap: () => _openDialog(context),
+          onTap: () => _open(context),
           behavior: HitTestBehavior.opaque,
           child: Container(
             decoration: BoxDecoration(color: kPanel, borderRadius: BorderRadius.circular(20),
@@ -732,40 +710,16 @@ class _CmdGroup extends StatelessWidget {
   }
 }
 
-// DIALOG isi opsi di tengah layar
-class _CmdDialog extends StatefulWidget {
+// DIALOG isi opsi
+class _CmdDialog extends StatelessWidget {
   final IconData icon;
   final String label, subtitle;
   final Color accent;
   final List<_CmdLeaf> children;
   const _CmdDialog({required this.icon, required this.label, required this.subtitle, required this.accent, required this.children});
-  @override
-  State<_CmdDialog> createState() => _CmdDialogState();
-}
-
-class _CmdDialogState extends State<_CmdDialog> {
-  // Notifier bersama untuk radio group dalam dialog ini. -1 = belum ada pilihan.
-  final ValueNotifier<int> _sel = ValueNotifier<int>(-1);
-
-  @override
-  void dispose() { _sel.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
-    final icon = widget.icon, label = widget.label, subtitle = widget.subtitle, accent = widget.accent;
-    // Bangun ulang tiap leaf dengan index + notifier grup.
-    // Leaf readOnly tidak ikut radio (tetap tombol baca biasa).
-    final mapped = <Widget>[];
-    for (int i = 0; i < widget.children.length; i++) {
-      final c = widget.children[i];
-      if (c.readOnly) {
-        mapped.add(c);
-      } else {
-        mapped.add(_CmdLeaf(c.label, c.icon, c.color, c.desc,
-            cmd: c.cmd, readOnly: false, groupSel: _sel, index: i));
-      }
-    }
-
     return ValueListenableBuilder<bool>(
       valueListenable: isNightNotifier,
       builder: (_, __, ___) => Center(
@@ -775,18 +729,14 @@ class _CmdDialogState extends State<_CmdDialog> {
             color: Colors.transparent,
             child: Container(
               constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.72, maxWidth: 440),
-              decoration: BoxDecoration(
-                color: kPanel,
-                borderRadius: BorderRadius.circular(24),
+              decoration: BoxDecoration(color: kPanel, borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: accent.withOpacity(.35)),
                 boxShadow: [
                   BoxShadow(color: accent.withOpacity(.15), blurRadius: 40, spreadRadius: -4),
                   BoxShadow(color: Colors.black.withOpacity(.4), blurRadius: 30),
-                ],
-              ),
+                ]),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 18, 14, 14),
+                Padding(padding: const EdgeInsets.fromLTRB(18, 18, 14, 14),
                   child: Row(children: [
                     Container(padding: const EdgeInsets.all(11),
                       decoration: BoxDecoration(color: accent.withOpacity(.14),
@@ -800,21 +750,14 @@ class _CmdDialogState extends State<_CmdDialog> {
                       Text(subtitle, style: TextStyle(color: mut(.4), fontSize: 10.5), maxLines: 2, overflow: TextOverflow.ellipsis),
                     ])),
                     const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
+                    GestureDetector(onTap: () => Navigator.pop(context),
                       child: Container(padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(color: mut(.06), shape: BoxShape.circle),
-                        child: Icon(Icons.close_rounded, color: mut(.5), size: 18)),
-                    ),
-                  ]),
-                ),
+                        child: Icon(Icons.close_rounded, color: mut(.5), size: 18))),
+                  ])),
                 Divider(height: 1, color: kBorder),
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(children: mapped),
-                  ),
-                ),
+                Flexible(child: SingleChildScrollView(padding: const EdgeInsets.all(12),
+                  child: Column(children: children))),
               ]),
             ),
           ),
@@ -824,53 +767,46 @@ class _CmdDialogState extends State<_CmdDialog> {
   }
 }
 
-// CMD LEAF
+// CMD LEAF — sekali tekan langsung eksekusi
 class _CmdLeaf extends StatefulWidget {
   final String label, desc, cmd;
   final IconData icon;
   final Color color;
   final bool readOnly;
-  // Radio group: notifier bersama + index leaf ini. Hanya 1 aktif per grup.
-  final ValueNotifier<int>? groupSel;
-  final int index;
-  const _CmdLeaf(this.label, this.icon, this.color, this.desc,
-      {required this.cmd, this.readOnly = false, this.groupSel, this.index = -1});
+  const _CmdLeaf(this.label, this.icon, this.color, this.desc, {required this.cmd, this.readOnly = false});
   @override
   State<_CmdLeaf> createState() => _CmdLeafState();
 }
 
 class _CmdLeafState extends State<_CmdLeaf> {
   bool _running = false;
+  bool _flash = false; // efek kilat sukses sesaat
 
   Future<void> _exec() async {
     if (_running) return;
-    if (!isRootNotifier.value) {
-      _snack('⚠ Butuh root untuk perintah ini', kYellow); return;
-    }
-    setState(() { _running = true; });
+    if (!isRootNotifier.value) { _snack('⚠ Butuh root untuk perintah ini', kYellow); return; }
+    setState(() => _running = true);
     HapticFeedback.mediumImpact();
     final out = await runRoot(widget.cmd);
-    if (mounted) {
-      setState(() => _running = false);
-      final isError = out.startsWith('ERR') || out.startsWith('ERROR');
-      if (widget.readOnly) {
-        if (out.isNotEmpty && out != 'OK') { _showSheet(out); }
-        else { _snack('📋 Selesai', widget.color); }
-      } else if (isError) {
-        _snack('✗ Gagal: ${out.replaceFirst(RegExp(r"ERR:?R?:? "), "")}', kRed);
-      } else {
-        // Tandai leaf ini sebagai pilihan aktif dalam grup
-        if (widget.groupSel != null && widget.index >= 0) {
-          widget.groupSel!.value = widget.index;
-        }
-        _snack('✓ ${widget.label} diterapkan', widget.color);
-      }
+    if (!mounted) return;
+    setState(() => _running = false);
+    final isError = out.startsWith('ERR') || out.startsWith('ERROR');
+    if (widget.readOnly) {
+      if (out.isNotEmpty && out != 'OK') { _showSheet(out); }
+      else { _snack('📋 Selesai', widget.color); }
+    } else if (isError) {
+      _snack('✗ Gagal: ${out.replaceFirst(RegExp(r"ERR:?R?:? "), "")}', kRed);
+    } else {
+      // kilat hijau sukses sesaat
+      setState(() => _flash = true);
+      _snack('✓ ${widget.label} diterapkan', widget.color);
+      Future.delayed(const Duration(milliseconds: 600), () { if (mounted) setState(() => _flash = false); });
     }
   }
 
   void _snack(String msg, Color c) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
     content: Text(msg, style: const TextStyle(fontWeight: FontWeight.w600)),
-    backgroundColor: kPanel2, duration: const Duration(milliseconds: 2000),
+    backgroundColor: kPanel2, duration: const Duration(milliseconds: 1800),
     behavior: SnackBarBehavior.floating,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
 
@@ -908,72 +844,42 @@ class _CmdLeafState extends State<_CmdLeaf> {
       valueListenable: isRootNotifier,
       builder: (_, root, __) {
         final locked = !root && !widget.readOnly;
-        // Tentukan apakah leaf ini terpilih (radio)
-        final sel = widget.groupSel;
-        Widget buildRow(bool selected) => Padding(padding: const EdgeInsets.only(bottom: 6),
+        return Padding(padding: const EdgeInsets.only(bottom: 6),
           child: GestureDetector(
             onTap: locked ? () => _snack('⚠ Butuh root', kYellow) : _exec,
-            child: AnimatedContainer(duration: const Duration(milliseconds: 180),
+            child: AnimatedContainer(duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: selected ? widget.color.withOpacity(.1) : locked ? mut(.03) : kPanel2,
+                color: _flash ? widget.color.withOpacity(.18) : locked ? mut(.03) : kPanel2,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: selected ? widget.color.withOpacity(.45) : kBorder.withOpacity(.4))),
+                border: Border.all(color: _flash ? widget.color.withOpacity(.5) : kBorder.withOpacity(.4))),
               child: Row(children: [
                 Container(width: 2.5, height: 36,
-                  decoration: BoxDecoration(color: locked ? mut(.15) : widget.color.withOpacity(selected ? .9 : .35), borderRadius: BorderRadius.circular(2))),
+                  decoration: BoxDecoration(color: locked ? mut(.15) : widget.color.withOpacity(.55), borderRadius: BorderRadius.circular(2))),
                 const SizedBox(width: 12),
                 Icon(locked ? Icons.lock_rounded : widget.icon, color: locked ? mut(.3) : widget.color, size: 18),
                 const SizedBox(width: 10),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(widget.label, style: TextStyle(color: locked ? mut(.4) : (selected ? widget.color : kWhite),
-                      fontSize: 12.5, fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+                  Text(widget.label, style: TextStyle(color: locked ? mut(.4) : kWhite,
+                      fontSize: 12.5, fontWeight: FontWeight.w600)),
                   Text(widget.desc, style: TextStyle(color: mut(.3), fontSize: 10.5)),
                 ])),
                 const SizedBox(width: 8),
                 if (_running)
                   SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: widget.color))
+                else if (_flash)
+                  Icon(Icons.check_circle_rounded, color: widget.color, size: 20)
                 else if (widget.readOnly)
-                  Icon(Icons.chevron_right_rounded, color: mut(.3), size: 18)
+                  Icon(Icons.search_rounded, color: mut(.35), size: 18)
                 else
-                  _Radio(selected: selected, color: locked ? mut(.2) : widget.color),
+                  Icon(Icons.play_arrow_rounded, color: locked ? mut(.2) : widget.color.withOpacity(.7), size: 22),
               ]),
             ),
           ),
         );
-
-        if (sel == null) return buildRow(false);
-        return ValueListenableBuilder<int>(
-          valueListenable: sel,
-          builder: (_, current, __) => buildRow(current == widget.index),
-        );
       },
     );
   }
-}
-
-// Indikator radio button
-class _Radio extends StatelessWidget {
-  final bool selected; final Color color;
-  const _Radio({required this.selected, required this.color});
-  @override
-  Widget build(BuildContext context) => AnimatedContainer(
-    duration: const Duration(milliseconds: 200),
-    width: 22, height: 22,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      color: selected ? color.withOpacity(.18) : Colors.transparent,
-      border: Border.all(color: selected ? color : mut(.25), width: 2),
-    ),
-    child: Center(
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 200),
-        scale: selected ? 1.0 : 0.0,
-        child: Container(width: 10, height: 10,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
-      ),
-    ),
-  );
 }
 
 // TOOLS TAB
@@ -988,9 +894,10 @@ class _ToolsTabState extends State<ToolsTab> {
     if (needRoot && !isRootNotifier.value) {
       _sheet('Butuh Root', 'Fitur ini memerlukan akses root aktif.', kYellow); return;
     }
-    String out;
-    if (needRoot) {
+    String out = '';
+    if (isRootNotifier.value) {
       out = await runRoot(cmd);
+      if (out == 'OK') out = '';
     } else {
       try { final r = await Process.run('sh', ['-c', cmd]); out = r.stdout.toString().trim(); if (out.isEmpty) out = r.stderr.toString().trim(); }
       catch (e) { out = 'Error: $e'; }
