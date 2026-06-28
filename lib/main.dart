@@ -81,6 +81,122 @@ Future<String> readSys(String path) async {
   return '';
 }
 
+// Baca properti Android (getprop) — jalan tanpa root
+Future<String> getProp(String key) async {
+  try {
+    final r = await Process.run('getprop', [key]);
+    return r.stdout.toString().trim();
+  } catch (_) {
+    if (_root) {
+      final out = await runRoot('getprop $key');
+      if (out != 'OK' && !out.startsWith('ERR')) return out;
+    }
+    return '';
+  }
+}
+
+// ============================================================
+// DEVICE INFO — deteksi otomatis kemampuan HP
+// ============================================================
+class DeviceInfo {
+  static final DeviceInfo i = DeviceInfo._();
+  DeviceInfo._();
+
+  String model = '---';
+  String brand = '---';
+  String platform = '---';
+  String androidVer = '---';
+  String cpuArch = '---';
+  int cpuCores = 0;
+
+  // Kemampuan yang terdeteksi
+  List<String> governors = [];      // governor yang didukung
+  List<int> freqsKhz = [];          // daftar frekuensi (kHz)
+  String? thermalPath;              // path zone suhu CPU yang valid
+  String? batteryTempPath;          // path suhu baterai
+  String? dt2wPath;                 // path gesture double-tap-to-wake
+  bool hasCpuFreq = false;
+
+  bool loaded = false;
+
+  Future<void> detect() async {
+    // Info dasar via getprop (tanpa root)
+    model      = await getProp('ro.product.model');
+    brand      = await getProp('ro.product.manufacturer');
+    platform   = await getProp('ro.board.platform');
+    androidVer = await getProp('ro.build.version.release');
+    cpuArch    = await getProp('ro.product.cpu.abi');
+
+    if (model.isEmpty) model = '---';
+    if (brand.isEmpty) brand = '---';
+    if (platform.isEmpty) platform = '---';
+    if (androidVer.isEmpty) androidVer = '---';
+
+    // Jumlah core CPU
+    cpuCores = 0;
+    for (int c = 0; c < 16; c++) {
+      final exists = await readSys('/sys/devices/system/cpu/cpu$c/cpufreq/scaling_cur_freq');
+      if (exists.isNotEmpty) cpuCores++;
+      else if (c > 0) break;
+    }
+    if (cpuCores == 0) cpuCores = 1;
+
+    // Governor yang tersedia
+    final govRaw = await readSys('/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors');
+    governors = govRaw.split(RegExp(r'\s+')).where((g) => g.isNotEmpty).toList();
+    hasCpuFreq = governors.isNotEmpty ||
+        (await readSys('/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq')).isNotEmpty;
+
+    // Frekuensi yang tersedia
+    final freqRaw = await readSys('/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_frequencies');
+    freqsKhz = freqRaw.split(RegExp(r'\s+'))
+        .map((f) => int.tryParse(f) ?? 0)
+        .where((f) => f > 0).toList()..sort();
+
+    // Cari thermal zone CPU yang valid
+    for (int z = 0; z < 20; z++) {
+      final t = await readSys('/sys/class/thermal/thermal_zone$z/temp');
+      final n = int.tryParse(t) ?? 0;
+      if (n > 20000 && n < 100000) { thermalPath = '/sys/class/thermal/thermal_zone$z/temp'; break; }
+    }
+
+    // Cari path suhu baterai
+    for (final p in [
+      '/sys/class/power_supply/battery/temp',
+      '/sys/class/power_supply/mtk-gauge/temp',
+      '/sys/class/power_supply/bms/temp',
+    ]) {
+      if ((await readSys(p)).isNotEmpty) { batteryTempPath = p; break; }
+    }
+
+    // Cari path DT2W (gesture wake) di berbagai vendor touch
+    for (final p in [
+      '/sys/devices/platform/goodix_ts.0/gesture/enable',
+      '/proc/touchpanel/double_tap_enable',
+      '/sys/touchpanel/double_tap',
+      '/sys/devices/virtual/touch/tp_dev/gesture_on',
+      '/proc/tp_gesture',
+    ]) {
+      if ((await readSys(p)).isNotEmpty) { dt2wPath = p; break; }
+    }
+
+    loaded = true;
+  }
+
+  // Buat 3-4 pilihan frekuensi representatif dari daftar yang ada
+  List<int> get freqChoices {
+    if (freqsKhz.isEmpty) return [];
+    final n = freqsKhz.length;
+    if (n <= 4) return freqsKhz.reversed.toList();
+    return [
+      freqsKhz[n - 1],          // max
+      freqsKhz[(n * 2 ~/ 3)],   // tinggi
+      freqsKhz[(n ~/ 3)],       // sedang
+      freqsKhz[0],              // min
+    ];
+  }
+}
+
 // APP
 class SahrulApp extends StatelessWidget {
   const SahrulApp({super.key});
@@ -132,9 +248,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     final hasRoot = await checkRoot();
     isRootNotifier.value = hasRoot;
     if (mounted) setState(() => _status = hasRoot ? 'Root detected ✓' : 'Non-root mode');
-    await Future.delayed(const Duration(milliseconds: 700));
-    if (mounted) setState(() => _status = 'Loading modules...');
     await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) setState(() => _status = 'Detecting device...');
+    await DeviceInfo.i.detect();
+    if (mounted) setState(() => _status = '${DeviceInfo.i.brand} ${DeviceInfo.i.model}');
+    await Future.delayed(const Duration(milliseconds: 600));
     if (mounted) {
       Navigator.pushReplacement(context, PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 600),
@@ -568,21 +686,14 @@ class CommandTab extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          _CmdGroup(icon: Icons.developer_board_rounded, label: 'CPU Governor', accent: kCyan,
-            subtitle: 'Mode kerja CPU',
-            children: [
-              _CmdLeaf('performance',  Icons.flash_on_rounded,      kRed,    'Semua core max — gaming',      cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo performance > \$f; done'),
-              _CmdLeaf('schedutil',    Icons.schedule_rounded,      kCyan,   'Adaptif — rekomendasi harian', cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo schedutil > \$f; done'),
-              _CmdLeaf('powersave',    Icons.battery_saver_rounded, kGreen,  'Hemat daya maksimal',          cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo powersave > \$f; done'),
-            ]),
+          // Banner info device terdeteksi
+          _deviceBanner(),
+          const SizedBox(height: 12),
 
-          _CmdGroup(icon: Icons.speed_rounded, label: 'CPU Frekuensi Max', accent: kOrange,
-            subtitle: '450 – 2000 MHz',
-            children: [
-              _CmdLeaf('2000 MHz', Icons.rocket_launch_rounded, kRed,    'Full speed',     cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do echo 2000000 > \$f; done'),
-              _CmdLeaf('1500 MHz', Icons.electric_bolt_rounded, kYellow, 'Balanced',       cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do echo 1500000 > \$f; done'),
-              _CmdLeaf('900 MHz',  Icons.eco_rounded,           kGreen,  'Hemat daya',     cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do echo 900000 > \$f; done'),
-            ]),
+          // CPU GOVERNOR — hanya tampil yang didukung HP
+          if (_govGroup() != null) _govGroup()!,
+          // CPU FREKUENSI — dari daftar frekuensi device
+          if (_freqGroup() != null) _freqGroup()!,
 
           _CmdGroup(icon: Icons.memory_rounded, label: 'RAM & Cache', accent: kPurple,
             subtitle: 'Bersihkan memori',
@@ -625,13 +736,8 @@ class CommandTab extends StatelessWidget {
               _CmdLeaf('TCP Cubic', Icons.show_chart_rounded, kPurple, 'Default Linux',        cmd: 'echo cubic > /proc/sys/net/ipv4/tcp_congestion_control'),
             ]),
 
-          _CmdGroup(icon: Icons.touch_app_rounded, label: 'Layar & Gesture', accent: kPink,
-            subtitle: 'Double tap to wake',
-            children: [
-              _CmdLeaf('Double Tap to Wake: ON',  Icons.touch_app_rounded,   kGreen, 'Ketuk 2x untuk nyalakan layar', cmd: 'echo 1 > /sys/devices/platform/goodix_ts.0/gesture/enable'),
-              _CmdLeaf('Double Tap to Wake: OFF', Icons.do_not_touch_rounded, kRed,  'Matikan gesture wake',          cmd: 'echo 0 > /sys/devices/platform/goodix_ts.0/gesture/enable'),
-              _CmdLeaf('Cek Status DT2W', Icons.search_rounded, kCyan, 'Lihat status gesture sekarang', cmd: 'cat /sys/devices/platform/goodix_ts.0/gesture/enable', readOnly: true),
-            ]),
+          // DT2W — hanya tampil kalau path gesture terdeteksi
+          if (DeviceInfo.i.dt2wPath != null) _dt2wGroup(),
 
           _CmdGroup(icon: Icons.settings_rounded, label: 'System', accent: kYellow,
             subtitle: 'Info & reboot',
@@ -645,6 +751,86 @@ class CommandTab extends StatelessWidget {
         ]),
       ),
     );
+  }
+
+  // Banner info device hasil deteksi otomatis
+  Widget _deviceBanner() {
+    final d = DeviceInfo.i;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kCyan.withOpacity(.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kCyan.withOpacity(.2))),
+      child: Row(children: [
+        Icon(Icons.phone_android_rounded, color: kCyan, size: 18),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${d.brand} ${d.model}',
+              style: TextStyle(color: kWhite, fontSize: 12.5, fontWeight: FontWeight.w700)),
+          Text('${d.platform} · ${d.cpuCores} core · Android ${d.androidVer}',
+              style: TextStyle(color: mut(.4), fontSize: 10.5)),
+        ])),
+      ]),
+    );
+  }
+
+  // Group governor dinamis — hanya yang didukung
+  _CmdGroup? _govGroup() {
+    final govs = DeviceInfo.i.governors;
+    if (govs.isEmpty) return null;
+    // ikon & deskripsi per governor umum
+    const meta = {
+      'performance':  ['Semua core max — gaming', Icons.flash_on_rounded, kRed],
+      'powersave':    ['Hemat daya maksimal', Icons.battery_saver_rounded, kGreen],
+      'schedutil':    ['Adaptif — rekomendasi harian', Icons.schedule_rounded, kCyan],
+      'ondemand':     ['Naik cepat saat butuh', Icons.trending_up_rounded, kOrange],
+      'conservative': ['Naik pelan — hemat', Icons.trending_down_rounded, kBlue],
+      'interactive':  ['Responsif untuk UI', Icons.touch_app_rounded, kPurple],
+    };
+    final leaves = govs.map((g) {
+      final m = meta[g];
+      final desc = m != null ? m[0] as String : 'Governor $g';
+      final ic   = m != null ? m[1] as IconData : Icons.tune_rounded;
+      final col  = m != null ? m[2] as Color : kTeal;
+      return _CmdLeaf(g, ic, col, desc,
+          cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo $g > \$f; done');
+    }).toList();
+    return _CmdGroup(icon: Icons.developer_board_rounded, label: 'CPU Governor', accent: kCyan,
+        subtitle: '${govs.length} governor terdeteksi', children: leaves);
+  }
+
+  // Group frekuensi dinamis — dari daftar frekuensi device
+  _CmdGroup? _freqGroup() {
+    final choices = DeviceInfo.i.freqChoices;
+    if (choices.isEmpty) return null;
+    final icons = [Icons.rocket_launch_rounded, Icons.bolt_rounded, Icons.eco_rounded, Icons.battery_saver_rounded];
+    final colors = [kRed, kOrange, kGreen, kBlue];
+    final descs = ['Full speed', 'Tinggi', 'Sedang', 'Hemat daya'];
+    final leaves = <_CmdLeaf>[];
+    for (int i = 0; i < choices.length; i++) {
+      final khz = choices[i];
+      final mhz = (khz / 1000).round();
+      leaves.add(_CmdLeaf('$mhz MHz',
+          icons[i.clamp(0, icons.length - 1)],
+          colors[i.clamp(0, colors.length - 1)],
+          descs[i.clamp(0, descs.length - 1)],
+          cmd: 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do echo $khz > \$f; done'));
+    }
+    return _CmdGroup(icon: Icons.speed_rounded, label: 'CPU Frekuensi Max', accent: kOrange,
+        subtitle: '${DeviceInfo.i.freqsKhz.length} step tersedia', children: leaves);
+  }
+
+  // Group DT2W dinamis — pakai path yang terdeteksi
+  _CmdGroup _dt2wGroup() {
+    final p = DeviceInfo.i.dt2wPath!;
+    return _CmdGroup(icon: Icons.touch_app_rounded, label: 'Layar & Gesture', accent: kPink,
+      subtitle: 'Double tap to wake',
+      children: [
+        _CmdLeaf('Double Tap to Wake: ON',  Icons.touch_app_rounded,    kGreen, 'Ketuk 2x nyalakan layar', cmd: 'echo 1 > $p'),
+        _CmdLeaf('Double Tap to Wake: OFF', Icons.do_not_touch_rounded, kRed,   'Matikan gesture wake',    cmd: 'echo 0 > $p'),
+        _CmdLeaf('Cek Status DT2W', Icons.search_rounded, kCyan, 'Lihat status gesture', cmd: 'cat $p', readOnly: true),
+      ]);
   }
 }
 
