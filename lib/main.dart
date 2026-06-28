@@ -28,6 +28,7 @@ const kOrange = Color(0xFFFF6B47);
 const kPurple = Color(0xFFB47FFF);
 const kTeal   = Color(0xFF13B5A6);
 const kBlue   = Color(0xFF3D8EFF);
+const kPink   = Color(0xFFFF2D78);
 
 Color get kBg     => _night ? const Color(0xFF060612) : const Color(0xFFF0F2F8);
 Color get kPanel  => _night ? const Color(0xFF0D0D20) : const Color(0xFFFFFFFF);
