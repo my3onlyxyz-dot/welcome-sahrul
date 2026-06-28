@@ -733,15 +733,39 @@ class _CmdGroup extends StatelessWidget {
 }
 
 // DIALOG isi opsi di tengah layar
-class _CmdDialog extends StatelessWidget {
+class _CmdDialog extends StatefulWidget {
   final IconData icon;
   final String label, subtitle;
   final Color accent;
   final List<_CmdLeaf> children;
   const _CmdDialog({required this.icon, required this.label, required this.subtitle, required this.accent, required this.children});
+  @override
+  State<_CmdDialog> createState() => _CmdDialogState();
+}
+
+class _CmdDialogState extends State<_CmdDialog> {
+  // Notifier bersama untuk radio group dalam dialog ini. -1 = belum ada pilihan.
+  final ValueNotifier<int> _sel = ValueNotifier<int>(-1);
+
+  @override
+  void dispose() { _sel.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
+    final icon = widget.icon, label = widget.label, subtitle = widget.subtitle, accent = widget.accent;
+    // Bangun ulang tiap leaf dengan index + notifier grup.
+    // Leaf readOnly tidak ikut radio (tetap tombol baca biasa).
+    final mapped = <Widget>[];
+    for (int i = 0; i < widget.children.length; i++) {
+      final c = widget.children[i];
+      if (c.readOnly) {
+        mapped.add(c);
+      } else {
+        mapped.add(_CmdLeaf(c.label, c.icon, c.color, c.desc,
+            cmd: c.cmd, readOnly: false, groupSel: _sel, index: i));
+      }
+    }
+
     return ValueListenableBuilder<bool>(
       valueListenable: isNightNotifier,
       builder: (_, __, ___) => Center(
@@ -761,7 +785,6 @@ class _CmdDialog extends StatelessWidget {
                 ],
               ),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                // Header dialog
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 18, 14, 14),
                   child: Row(children: [
@@ -786,11 +809,10 @@ class _CmdDialog extends StatelessWidget {
                   ]),
                 ),
                 Divider(height: 1, color: kBorder),
-                // List opsi (scrollable)
                 Flexible(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(12),
-                    child: Column(children: children),
+                    child: Column(children: mapped),
                   ),
                 ),
               ]),
@@ -808,13 +830,17 @@ class _CmdLeaf extends StatefulWidget {
   final IconData icon;
   final Color color;
   final bool readOnly;
-  const _CmdLeaf(this.label, this.icon, this.color, this.desc, {required this.cmd, this.readOnly = false});
+  // Radio group: notifier bersama + index leaf ini. Hanya 1 aktif per grup.
+  final ValueNotifier<int>? groupSel;
+  final int index;
+  const _CmdLeaf(this.label, this.icon, this.color, this.desc,
+      {required this.cmd, this.readOnly = false, this.groupSel, this.index = -1});
   @override
   State<_CmdLeaf> createState() => _CmdLeafState();
 }
 
 class _CmdLeafState extends State<_CmdLeaf> {
-  bool _running = false, _active = false;
+  bool _running = false;
 
   Future<void> _exec() async {
     if (_running) return;
@@ -825,11 +851,19 @@ class _CmdLeafState extends State<_CmdLeaf> {
     HapticFeedback.mediumImpact();
     final out = await runRoot(widget.cmd);
     if (mounted) {
-      setState(() { _running = false; if (!widget.readOnly) _active = !_active; });
-      if (out.isNotEmpty && out != 'OK' && out.length > 5) {
-        _showSheet(out);
+      setState(() => _running = false);
+      final isError = out.startsWith('ERR') || out.startsWith('ERROR');
+      if (widget.readOnly) {
+        if (out.isNotEmpty && out != 'OK') { _showSheet(out); }
+        else { _snack('📋 Selesai', widget.color); }
+      } else if (isError) {
+        _snack('✗ Gagal: ${out.replaceFirst(RegExp(r"ERR:?R?:? "), "")}', kRed);
       } else {
-        _snack(widget.readOnly ? '📋 Selesai' : (_active ? '✓ ${widget.label}' : '○ ${widget.label} off'), widget.color);
+        // Tandai leaf ini sebagai pilihan aktif dalam grup
+        if (widget.groupSel != null && widget.index >= 0) {
+          widget.groupSel!.value = widget.index;
+        }
+        _snack('✓ ${widget.label} diterapkan', widget.color);
       }
     }
   }
@@ -874,24 +908,26 @@ class _CmdLeafState extends State<_CmdLeaf> {
       valueListenable: isRootNotifier,
       builder: (_, root, __) {
         final locked = !root && !widget.readOnly;
-        return Padding(padding: const EdgeInsets.only(bottom: 6),
+        // Tentukan apakah leaf ini terpilih (radio)
+        final sel = widget.groupSel;
+        Widget buildRow(bool selected) => Padding(padding: const EdgeInsets.only(bottom: 6),
           child: GestureDetector(
             onTap: locked ? () => _snack('⚠ Butuh root', kYellow) : _exec,
             child: AnimatedContainer(duration: const Duration(milliseconds: 180),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: _active ? widget.color.withOpacity(.1) : locked ? mut(.03) : kPanel2,
+                color: selected ? widget.color.withOpacity(.1) : locked ? mut(.03) : kPanel2,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: _active ? widget.color.withOpacity(.35) : kBorder.withOpacity(.4))),
+                border: Border.all(color: selected ? widget.color.withOpacity(.45) : kBorder.withOpacity(.4))),
               child: Row(children: [
                 Container(width: 2.5, height: 36,
-                  decoration: BoxDecoration(color: locked ? mut(.15) : widget.color.withOpacity(_active ? .9 : .35), borderRadius: BorderRadius.circular(2))),
+                  decoration: BoxDecoration(color: locked ? mut(.15) : widget.color.withOpacity(selected ? .9 : .35), borderRadius: BorderRadius.circular(2))),
                 const SizedBox(width: 12),
                 Icon(locked ? Icons.lock_rounded : widget.icon, color: locked ? mut(.3) : widget.color, size: 18),
                 const SizedBox(width: 10),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(widget.label, style: TextStyle(color: locked ? mut(.4) : (_active ? widget.color : kWhite),
-                      fontSize: 12.5, fontWeight: _active ? FontWeight.w700 : FontWeight.w500)),
+                  Text(widget.label, style: TextStyle(color: locked ? mut(.4) : (selected ? widget.color : kWhite),
+                      fontSize: 12.5, fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
                   Text(widget.desc, style: TextStyle(color: mut(.3), fontSize: 10.5)),
                 ])),
                 const SizedBox(width: 8),
@@ -900,29 +936,44 @@ class _CmdLeafState extends State<_CmdLeaf> {
                 else if (widget.readOnly)
                   Icon(Icons.chevron_right_rounded, color: mut(.3), size: 18)
                 else
-                  _Switch(on: _active, color: locked ? mut(.2) : widget.color),
+                  _Radio(selected: selected, color: locked ? mut(.2) : widget.color),
               ]),
             ),
           ),
+        );
+
+        if (sel == null) return buildRow(false);
+        return ValueListenableBuilder<int>(
+          valueListenable: sel,
+          builder: (_, current, __) => buildRow(current == widget.index),
         );
       },
     );
   }
 }
 
-class _Switch extends StatelessWidget {
-  final bool on; final Color color;
-  const _Switch({required this.on, required this.color});
+// Indikator radio button
+class _Radio extends StatelessWidget {
+  final bool selected; final Color color;
+  const _Radio({required this.selected, required this.color});
   @override
   Widget build(BuildContext context) => AnimatedContainer(
-    duration: const Duration(milliseconds: 200), width: 38, height: 22,
-    decoration: BoxDecoration(color: on ? color.withOpacity(.25) : mut(.06),
-      borderRadius: BorderRadius.circular(11),
-      border: Border.all(color: on ? color.withOpacity(.6) : mut(.15))),
-    child: AnimatedAlign(duration: const Duration(milliseconds: 200),
-      alignment: on ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(margin: const EdgeInsets.all(3), width: 16, height: 16,
-        decoration: BoxDecoration(shape: BoxShape.circle, color: on ? color : mut(.25)))));
+    duration: const Duration(milliseconds: 200),
+    width: 22, height: 22,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: selected ? color.withOpacity(.18) : Colors.transparent,
+      border: Border.all(color: selected ? color : mut(.25), width: 2),
+    ),
+    child: Center(
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 200),
+        scale: selected ? 1.0 : 0.0,
+        child: Container(width: 10, height: 10,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
+      ),
+    ),
+  );
 }
 
 // TOOLS TAB
