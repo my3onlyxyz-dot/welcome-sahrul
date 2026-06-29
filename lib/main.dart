@@ -783,27 +783,36 @@ class KontrolTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = DeviceInfo.i;
+
+    // Banner root — dibuat terpisah agar tidak ambigu
+    final rootBanner = ValueListenableBuilder<bool>(
+      valueListenable: isRootNotifier,
+      builder: (_, root, __) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: root ? kGreen.withOpacity(.12) : kOrange.withOpacity(.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: root ? kGreen.withOpacity(.4) : kOrange.withOpacity(.4)),
+        ),
+        child: Row(children: [
+          Icon(root ? Icons.check_circle_rounded : Icons.lock_rounded,
+              color: root ? kGreen : kOrange, size: 16),
+          const SizedBox(width: 8),
+          Expanded(child: Text(
+            root ? 'Root aktif — semua kontrol tersedia' : 'Non-root — kontrol tidak tersedia',
+            style: TextStyle(color: root ? kGreen : kOrange, fontSize: 12.5),
+          )),
+        ]),
+      ),
+    );
+
     return SingleChildScrollView(
       padding: const EdgeInsets.only(top: 12, bottom: 20),
       child: Column(children: [
-        // Banner root
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: ValueListenableBuilder<bool>(
-            valueListenable: isRootNotifier,
-            builder: (_, root, __) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: root ? kGreen.withOpacity(.12) : kOrange.withOpacity(.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: root ? kGreen.withOpacity(.4) : kOrange.withOpacity(.4))),
-              child: Row(children: [
-                Icon(root ? Icons.check_circle_rounded : Icons.lock_rounded,
-                    color: root ? kGreen : kOrange, size: 16),
-                const SizedBox(width: 8),
-                Text(root ? 'Root aktif — semua kontrol tersedia' : 'Non-root — kontrol tidak tersedia',
-                    style: TextStyle(color: root ? kGreen : kOrange, fontSize: 12.5)),
-              ]))));
+          child: rootBanner,
+        ),
 
         // CPU Governor — hanya tampil kalau ada
         if (d.governors.isNotEmpty)
